@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - COTEMA Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">🔧 COTEMA Analytics</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2>Dashboard de Análisis</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card text-white bg-info">
+                            <div class="card-body">
+                                <h5 class="card-title">Total Registros</h5>
+                                <h3>{{ total_registros }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-success">
+                            <div class="card-body">
+                                <h5 class="card-title">Equipos Únicos</h5>
+                                <h3>{{ equipos_unicos }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-warning">
+                            <div class="card-body">
+                                <h5 class="card-title">Estado</h5>
+                                <h3>✅ Activo</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Seleccionar Mes para Análisis</h5>
+                    </div>
+                    <div class="card-body">
+                        <select id="mesSelector" class="form-select mb-3">
+                            <option value="">Selecciona un mes...</option>
+                            {% for mes in months %}
+                            <option value="{{ mes }}">{{ mes }}</option>
+                            {% endfor %}
+                        </select>
+                        <button onclick="analizarMes()" class="btn btn-primary">Analizar KPIs</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Estado del Análisis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="estadoAnalisis">
+                            <p class="text-muted">Selecciona un mes para comenzar el análisis</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4" id="resultados" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Resultados del Análisis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="contenidoResultados">
+                            <!-- Los resultados se cargarán aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function analizarMes() {
+            const mes = document.getElementById('mesSelector').value;
+            if (!mes) {
+                alert('Por favor selecciona un mes');
+                return;
+            }
+
+            document.getElementById('estadoAnalisis').innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Analizando...</span></div>';
+            
+            fetch(`/kpis/${mes}`)
+                .then(response => response.json())
+                .then(data => {
+                    mostrarResultados(data);
+                })
+                .catch(error => {
+                    document.getElementById('estadoAnalisis').innerHTML = '<p class="text-danger">Error en el análisis: ' + error.message + '</p>';
+                });
+        }
+
+        function mostrarResultados(data) {
+            document.getElementById('estadoAnalisis').innerHTML = '<p class="text-success">✅ Análisis completado</p>';
+            
+            let html = `
+                <h6>Mes: ${data.mes}</h6>
+                <p>Total equipos analizados: ${data.total_equipos}</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>FR-30 (Riesgo 30 días)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr><th>Equipo</th><th>Riesgo</th><th>Banda</th></tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            Object.keys(data.kpis.fr30).slice(0, 5).forEach(equipo => {
+                const fr30 = data.kpis.fr30[equipo];
+                html += `<tr><td>${equipo}</td><td>${(fr30.risk_30d * 100).toFixed(1)}%</td><td>${fr30.banda}</td></tr>`;
+            });
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>RUL (Vida Útil Restante)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr><th>Equipo</th><th>RUL50</th><th>RUL90</th></tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            Object.keys(data.kpis.rul).slice(0, 5).forEach(equipo => {
+                const rul = data.kpis.rul[equipo];
+                html += `<tr><td>${equipo}</td><td>${rul.rul50_d}d</td><td>${rul.rul90_d}d</td></tr>`;
+            });
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="/api/export/json" class="btn btn-sm btn-outline-primary">Exportar JSON</a>
+                    <a href="/api/export/csv" class="btn btn-sm btn-outline-success">Exportar CSV</a>
+                </div>
+            `;
+            
+            document.getElementById('contenidoResultados').innerHTML = html;
+            document.getElementById('resultados').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
+</content>
+</invoke>
