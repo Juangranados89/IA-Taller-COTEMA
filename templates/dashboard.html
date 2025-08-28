@@ -1,0 +1,663 @@
+{% extends "base.html" %}
+
+{% block title %}COTEMA - Dashboard{% endblock %}
+
+{% block sidebar %}
+<div class="col-md-3 sidebar">
+    <div class="p-3">
+        <h5>
+            <i class="fas fa-chart-bar"></i>
+            Panel de Control
+        </h5>
+        
+        <!-- Statistics Summary -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">Resumen de Datos</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-primary">{{ stats.total_registros|number_format }}</h4>
+                        <small class="text-muted">Registros</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-success">{{ stats.equipos_unicos }}</h4>
+                        <small class="text-muted">Equipos</small>
+                    </div>
+                </div>
+                <hr>
+                <p class="small mb-1">
+                    <strong>Período:</strong><br>
+                    {{ stats.fecha_min }} a {{ stats.fecha_max }}
+                </p>
+                <p class="small mb-0">
+                    <strong>Sistemas:</strong> {{ stats.sistemas_unicos }}
+                </p>
+            </div>
+        </div>
+        
+        <!-- Month Selection -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">Análisis por Mes</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label for="mesSelect" class="form-label">Seleccionar mes:</label>
+                    <select class="form-select" id="mesSelect">
+                        <option value="">Selecciona un mes...</option>
+                        {% for mes in meses_disponibles %}
+                        <option value="{{ mes }}">{{ mes }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-sm w-100" onclick="calculateKPIs()" id="calculateBtn">
+                    <i class="fas fa-calculator"></i>
+                    Calcular KPIs
+                </button>
+                
+                <div id="kpiStatus" class="mt-2"></div>
+            </div>
+        </div>
+        
+        <!-- KPI Summary -->
+        <div class="card mb-3" id="kpiSummaryCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">Resumen KPIs</h6>
+            </div>
+            <div class="card-body" id="kpiSummaryContent">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+        
+        <!-- Export Options -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Exportar Datos</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/api/export/csv" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-file-csv"></i>
+                        Descargar CSV
+                    </a>
+                    <a href="/api/export/json" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-file-code"></i>
+                        Descargar JSON
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-chart-line"></i>
+                Dashboard de Análisis
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+                    <li class="breadcrumb-item active">Dashboard</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+    
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+                <i class="fas fa-chart-bar"></i>
+                Vista General
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="kpis-tab" data-bs-toggle="tab" data-bs-target="#kpis" type="button" role="tab">
+                <i class="fas fa-brain"></i>
+                KPIs Predictivos
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="detailed-tab" data-bs-toggle="tab" data-bs-target="#detailed" type="button" role="tab">
+                <i class="fas fa-search"></i>
+                Análisis Detallado
+            </button>
+        </li>
+    </ul>
+    
+    <!-- Tab Content -->
+    <div class="tab-content" id="dashboardTabsContent">
+        <!-- Overview Tab -->
+        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <div class="row mt-3">
+                <!-- Temporal Distribution -->
+                <div class="col-lg-6 mb-4">
+                    <div class="plot-container">
+                        <div id="temporalPlot">
+                            {% if plots.ingresos_temporales %}
+                                <script>
+                                    Plotly.newPlot('temporalPlot', {{ plots.ingresos_temporales|safe }});
+                                </script>
+                            {% else %}
+                                <div class="text-center text-muted p-4">
+                                    <i class="fas fa-chart-line fa-3x"></i>
+                                    <p>Gráfico no disponible</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Top Equipment -->
+                <div class="col-lg-6 mb-4">
+                    <div class="plot-container">
+                        <div id="topEquipmentPlot">
+                            {% if plots.top_equipos %}
+                                <script>
+                                    Plotly.newPlot('topEquipmentPlot', {{ plots.top_equipos|safe }});
+                                </script>
+                            {% else %}
+                                <div class="text-center text-muted p-4">
+                                    <i class="fas fa-tools fa-3x"></i>
+                                    <p>Gráfico no disponible</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Systems Distribution -->
+                <div class="col-lg-6 mb-4">
+                    <div class="plot-container">
+                        <div id="systemsPlot">
+                            {% if plots.sistemas_afectados %}
+                                <script>
+                                    Plotly.newPlot('systemsPlot', {{ plots.sistemas_afectados|safe }});
+                                </script>
+                            {% else %}
+                                <div class="text-center text-muted p-4">
+                                    <i class="fas fa-cogs fa-3x"></i>
+                                    <p>Gráfico no disponible</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Activity Heatmap -->
+                <div class="col-lg-6 mb-4">
+                    <div class="plot-container">
+                        <div id="activityHeatmap">
+                            {% if plots.heatmap_actividad %}
+                                <script>
+                                    Plotly.newPlot('activityHeatmap', {{ plots.heatmap_actividad|safe }});
+                                </script>
+                            {% else %}
+                                <div class="text-center text-muted p-4">
+                                    <i class="fas fa-calendar fa-3x"></i>
+                                    <p>Heatmap no disponible</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- TBF Analysis -->
+                <div class="col-12 mb-4">
+                    <div class="plot-container">
+                        <div id="tbfAnalysis">
+                            {% if plots.tbf_analysis %}
+                                <script>
+                                    Plotly.newPlot('tbfAnalysis', {{ plots.tbf_analysis|safe }});
+                                </script>
+                            {% else %}
+                                <div class="text-center text-muted p-4">
+                                    <i class="fas fa-clock fa-3x"></i>
+                                    <p>Análisis TBF no disponible</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- MTTR Analysis -->
+                <div class="col-12 mb-4">
+                    <div class="plot-container">
+                        <div id="mttrAnalysis">
+                            {% if plots.mttr_metrics %}
+                                <script>
+                                    Plotly.newPlot('mttrAnalysis', {{ plots.mttr_metrics|safe }});
+                                </script>
+                            {% else %}
+                                <div class="text-center text-muted p-4">
+                                    <i class="fas fa-wrench fa-3x"></i>
+                                    <p>Análisis MTTR no disponible</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- KPIs Tab -->
+        <div class="tab-pane fade" id="kpis" role="tabpanel">
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div id="kpiResults">
+                        <div class="text-center text-muted p-5">
+                            <i class="fas fa-calculator fa-3x"></i>
+                            <h4>KPIs Predictivos</h4>
+                            <p>Selecciona un mes en el panel lateral y haz clic en "Calcular KPIs" para generar los análisis predictivos.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detailed Analysis Tab -->
+        <div class="tab-pane fade" id="detailed" role="tabpanel">
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div id="detailedAnalysis">
+                        <div class="text-center text-muted p-5">
+                            <i class="fas fa-search fa-3x"></i>
+                            <h4>Análisis Detallado</h4>
+                            <p>Primero calcula los KPIs para acceder al análisis detallado por equipo.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Equipment Details Modal -->
+<div class="modal fade" id="equipmentModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="equipmentModalTitle">Detalles del Equipo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="equipmentModalBody">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentKPIsData = null;
+let currentMonth = null;
+
+function calculateKPIs() {
+    const mesSelect = document.getElementById('mesSelect');
+    const selectedMonth = mesSelect.value;
+    
+    if (!selectedMonth) {
+        alert('Por favor, selecciona un mes.');
+        return;
+    }
+    
+    currentMonth = selectedMonth;
+    
+    // Show loading
+    const calculateBtn = document.getElementById('calculateBtn');
+    const originalText = calculateBtn.innerHTML;
+    calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculando...';
+    calculateBtn.disabled = true;
+    
+    const kpiStatus = document.getElementById('kpiStatus');
+    kpiStatus.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> Calculando KPIs...</div>';
+    
+    // Make API call
+    fetch(`/kpis/${selectedMonth}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentKPIsData = data.kpis;
+                displayKPIResults(data);
+                updateKPISummary(data);
+                kpiStatus.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> KPIs calculados exitosamente</div>';
+            } else {
+                kpiStatus.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error: ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            kpiStatus.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error calculando KPIs</div>';
+        })
+        .finally(() => {
+            calculateBtn.innerHTML = originalText;
+            calculateBtn.disabled = false;
+        });
+}
+
+function displayKPIResults(data) {
+    const kpiResults = document.getElementById('kpiResults');
+    
+    // Switch to KPI tab
+    const kpiTab = new bootstrap.Tab(document.getElementById('kpis-tab'));
+    kpiTab.show();
+    
+    kpiResults.innerHTML = `
+        <div class="row">
+            <div class="col-12 mb-3">
+                <h4>KPIs Predictivos - ${data.mes}</h4>
+                <p class="text-muted">Análisis generado para ${data.total_equipos} equipos</p>
+            </div>
+        </div>
+        
+        <!-- KPI Charts Row -->
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="plot-container">
+                    <div id="fr30Chart"></div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="plot-container">
+                    <div id="rulChart"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="plot-container">
+                    <div id="forecastChart"></div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="plot-container">
+                    <div id="anomalyScatter"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Equipment Summary Table -->
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="plot-container">
+                    <div id="equipmentSummary"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Generate and display charts
+    generateKPICharts(data.kpis);
+}
+
+function generateKPICharts(kpis) {
+    // FR-30 Chart
+    generateFR30Chart(kpis.fr30);
+    
+    // RUL Chart
+    generateRULChart(kpis.rul);
+    
+    // Forecast Chart
+    generateForecastChart(kpis.forecast);
+    
+    // Anomaly Scatter
+    generateAnomalyScatter(kpis);
+    
+    // Equipment Summary Table
+    generateEquipmentSummary(kpis);
+}
+
+function generateFR30Chart(fr30Data) {
+    const equipos = Object.keys(fr30Data);
+    const risks = equipos.map(eq => fr30Data[eq].risk_30d || 0);
+    const colors = equipos.map(eq => {
+        const banda = fr30Data[eq].banda || '';
+        if (banda.includes('🔴')) return 'red';
+        if (banda.includes('🟠')) return 'orange';
+        if (banda.includes('🟢')) return 'green';
+        return 'gray';
+    });
+    
+    const trace = {
+        x: equipos,
+        y: risks,
+        type: 'bar',
+        marker: { color: colors },
+        text: risks.map(r => `${(r * 100).toFixed(1)}%`),
+        textposition: 'auto',
+        hovertemplate: '<b>%{x}</b><br>Riesgo: %{y:.1%}<extra></extra>'
+    };
+    
+    const layout = {
+        title: 'FR-30: Riesgo de Falla en 30 Días',
+        xaxis: { title: 'Equipos' },
+        yaxis: { title: 'Probabilidad', tickformat: '.0%' },
+        shapes: [
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0.5, y1: 0.5, line: { color: 'red', dash: 'dash' } },
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0.3, y1: 0.3, line: { color: 'orange', dash: 'dash' } }
+        ]
+    };
+    
+    Plotly.newPlot('fr30Chart', [trace], layout);
+}
+
+function generateRULChart(rulData) {
+    const equipos = Object.keys(rulData);
+    const rul50 = equipos.map(eq => rulData[eq].rul50_d || 0);
+    const rul90 = equipos.map(eq => rulData[eq].rul90_d || 0);
+    
+    const trace1 = {
+        x: equipos,
+        y: rul50,
+        type: 'bar',
+        name: 'RUL-50 (Mediana)',
+        marker: { color: 'lightblue' }
+    };
+    
+    const trace2 = {
+        x: equipos,
+        y: rul90,
+        type: 'bar',
+        name: 'RUL-90 (Conservador)',
+        marker: { color: 'darkblue' }
+    };
+    
+    const layout = {
+        title: 'RUL: Vida Útil Restante',
+        xaxis: { title: 'Equipos' },
+        yaxis: { title: 'Días Restantes' },
+        barmode: 'group'
+    };
+    
+    Plotly.newPlot('rulChart', [trace1, trace2], layout);
+}
+
+function generateForecastChart(forecastData) {
+    const equipos = Object.keys(forecastData);
+    const forecast7d = equipos.map(eq => forecastData[eq].forecast_7d_h || 0);
+    const forecast30d = equipos.map(eq => forecastData[eq].forecast_30d_h || 0);
+    
+    const trace1 = {
+        x: equipos,
+        y: forecast7d,
+        type: 'bar',
+        name: 'Pronóstico 7 días',
+        marker: { color: 'lightgreen' }
+    };
+    
+    const trace2 = {
+        x: equipos,
+        y: forecast30d,
+        type: 'bar',
+        name: 'Pronóstico 30 días',
+        marker: { color: 'darkgreen' }
+    };
+    
+    const layout = {
+        title: 'Pronóstico de Uso: Horas Proyectadas',
+        xaxis: { title: 'Equipos' },
+        yaxis: { title: 'Horas de Operación' },
+        barmode: 'group'
+    };
+    
+    Plotly.newPlot('forecastChart', [trace1, trace2], layout);
+}
+
+function generateAnomalyScatter(kpis) {
+    const equipos = Object.keys(kpis.fr30);
+    const x_values = equipos.map(eq => kpis.rul[eq]?.rul50_d || 0);
+    const y_values = equipos.map(eq => kpis.fr30[eq]?.risk_30d || 0);
+    const colors = equipos.map(eq => kpis.anomaly[eq]?.anomaly_score || 0);
+    
+    const trace = {
+        x: x_values,
+        y: y_values,
+        mode: 'markers',
+        type: 'scatter',
+        text: equipos,
+        marker: {
+            size: 12,
+            color: colors,
+            colorscale: 'Viridis',
+            colorbar: { title: 'Score Anomalía' }
+        },
+        hovertemplate: '<b>%{text}</b><br>RUL-50: %{x} días<br>FR-30: %{y:.1%}<br>Anomalía: %{marker.color:.2f}<extra></extra>'
+    };
+    
+    const layout = {
+        title: 'Análisis Multidimensional: RUL vs Riesgo vs Anomalías',
+        xaxis: { title: 'RUL-50 (días)' },
+        yaxis: { title: 'Riesgo FR-30', tickformat: '.0%' }
+    };
+    
+    Plotly.newPlot('anomalyScatter', [trace], layout);
+}
+
+function generateEquipmentSummary(kpis) {
+    const equipos = Object.keys(kpis.fr30);
+    
+    const tableData = equipos.map(equipo => [
+        equipo,
+        `${((kpis.fr30[equipo]?.risk_30d || 0) * 100).toFixed(1)}%`,
+        kpis.fr30[equipo]?.banda || 'N/A',
+        `${Math.round(kpis.rul[equipo]?.rul50_d || 0)}d`,
+        `${Math.round(kpis.rul[equipo]?.rul90_d || 0)}d`,
+        `${Math.round(kpis.forecast[equipo]?.forecast_7d_h || 0)}h`,
+        `${Math.round(kpis.forecast[equipo]?.forecast_30d_h || 0)}h`,
+        (kpis.anomaly[equipo]?.anomaly_score || 0).toFixed(2),
+        kpis.anomaly[equipo]?.banda || 'N/A'
+    ]);
+    
+    const trace = {
+        type: 'table',
+        header: {
+            values: ['Equipo', 'FR-30', 'Banda FR-30', 'RUL-50', 'RUL-90', 'Pronóstico 7d', 'Pronóstico 30d', 'Anomalía', 'Banda Anomalía'],
+            fill: { color: 'paleturquoise' },
+            align: 'left'
+        },
+        cells: {
+            values: [
+                tableData.map(row => row[0]),
+                tableData.map(row => row[1]),
+                tableData.map(row => row[2]),
+                tableData.map(row => row[3]),
+                tableData.map(row => row[4]),
+                tableData.map(row => row[5]),
+                tableData.map(row => row[6]),
+                tableData.map(row => row[7]),
+                tableData.map(row => row[8])
+            ],
+            fill: { color: 'lavender' },
+            align: 'left'
+        }
+    };
+    
+    const layout = {
+        title: 'Resumen de KPIs por Equipo',
+        height: 600
+    };
+    
+    Plotly.newPlot('equipmentSummary', [trace], layout);
+}
+
+function updateKPISummary(data) {
+    const kpiSummaryCard = document.getElementById('kpiSummaryCard');
+    const kpiSummaryContent = document.getElementById('kpiSummaryContent');
+    
+    // Calculate summary statistics
+    let fr30Alto = 0, fr30Medio = 0, fr30Bajo = 0;
+    let rulCritico = 0, rulAlerta = 0, rulNormal = 0;
+    let anomaliaAlta = 0, anomaliaMedia = 0, anomaliaBaja = 0;
+    
+    Object.values(data.kpis.fr30).forEach(equipo => {
+        const risk = equipo.risk_30d || 0;
+        if (risk >= 0.5) fr30Alto++;
+        else if (risk >= 0.3) fr30Medio++;
+        else fr30Bajo++;
+    });
+    
+    Object.values(data.kpis.rul).forEach(equipo => {
+        const rul90 = equipo.rul90_d || 0;
+        if (rul90 < 7) rulCritico++;
+        else if (rul90 < 21) rulAlerta++;
+        else rulNormal++;
+    });
+    
+    Object.values(data.kpis.anomaly).forEach(equipo => {
+        const score = equipo.anomaly_score || 0;
+        if (score >= 0.8) anomaliaAlta++;
+        else if (score >= 0.6) anomaliaMedia++;
+        else anomaliaBaja++;
+    });
+    
+    kpiSummaryContent.innerHTML = `
+        <div class="row text-center">
+            <div class="col-12 mb-2">
+                <h6>FR-30</h6>
+                <div class="badge bg-danger">${fr30Alto}</div>
+                <div class="badge bg-warning">${fr30Medio}</div>
+                <div class="badge bg-success">${fr30Bajo}</div>
+            </div>
+            <div class="col-12 mb-2">
+                <h6>RUL</h6>
+                <div class="badge bg-danger">${rulCritico}</div>
+                <div class="badge bg-warning">${rulAlerta}</div>
+                <div class="badge bg-success">${rulNormal}</div>
+            </div>
+            <div class="col-12">
+                <h6>Anomalías</h6>
+                <div class="badge bg-danger">${anomaliaAlta}</div>
+                <div class="badge bg-warning">${anomaliaMedia}</div>
+                <div class="badge bg-success">${anomaliaBaja}</div>
+            </div>
+        </div>
+    `;
+    
+    kpiSummaryCard.style.display = 'block';
+}
+
+function showEquipmentDetails(equipo) {
+    // This function would be called when clicking on equipment in charts
+    // It would fetch detailed information and show in modal
+    console.log('Show details for equipment:', equipo);
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Any initialization code here
+});
+</script>
+{% endblock %}

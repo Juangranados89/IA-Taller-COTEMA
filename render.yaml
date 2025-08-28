@@ -1,0 +1,21 @@
+{
+  "name": "COTEMA Analytics",
+  "description": "Servicio web para análisis predictivo de talleres de mantenimiento con IA",
+  "repository": "https://github.com/Juangranados89/IA-Taller-COTEMA",
+  "keywords": ["flask", "ai", "predictive-analytics", "maintenance", "cotema"],
+  "env": {
+    "FLASK_ENV": {
+      "description": "Flask environment",
+      "value": "production"
+    },
+    "SECRET_KEY": {
+      "description": "Secret key for Flask sessions",
+      "generator": "secret"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
