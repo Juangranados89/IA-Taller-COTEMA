@@ -191,9 +191,21 @@ def calculate_kpis(mes):
 def connection_test():
     return jsonify({
         'status': 'ok',
-        'message': 'COTEMA Analytics API operativa',
+        'message': 'COTEMA Analytics API operativa - v2.0',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
+        'version': '2.0.0',
+        'excel_processing': 'enabled'
+    })
+
+@app.route('/api/status')
+def api_status():
+    return jsonify({
+        'status': 'running',
+        'upload_endpoint': 'active',
+        'data_loaded': global_data['df'] is not None,
+        'last_processed': global_data['processed_date'].isoformat() if global_data['processed_date'] else None,
+        'stats': global_data.get('stats', {}),
+        'version': '2.0.0'
     })
 
 if __name__ == '__main__':
