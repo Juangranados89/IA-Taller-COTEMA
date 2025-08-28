@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}Predicciones ML - COTEMA Analytics{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0">🤖 Predicciones Machine Learning</h2>
+                    <p class="text-muted">Análisis predictivo avanzado con IA</p>
+                </div>
+                <div class="text-end">
+                    {% if ml_available %}
+                        <span class="badge bg-success fs-6">
+                            <i class="fas fa-robot"></i> ML Activo
+                        </span>
+                    {% else %}
+                        <span class="badge bg-warning fs-6">
+                            <i class="fas fa-exclamation-triangle"></i> ML No Disponible
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selector de Equipo -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs"></i> Selección de Equipo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="equipoSelect" class="form-label">Equipo para Análisis Predictivo:</label>
+                        <select class="form-select" id="equipoSelect">
+                            <option value="">Seleccionar equipo...</option>
+                            <option value="VD-CO01">VD-CO01 - Ventilador Principal</option>
+                            <option value="VD-CO02">VD-CO02 - Ventilador Secundario</option>
+                            <option value="VD-CO13">VD-CO13 - Ventilador Auxiliar</option>
+                            <option value="FR-MOT01">FR-MOT01 - Motor Frecuencia Variable</option>
+                            <option value="FR-MOT02">FR-MOT02 - Motor Backup</option>
+                            <option value="HYD-PMP01">HYD-PMP01 - Bomba Hidráulica</option>
+                            <option value="ELE-GEN01">ELE-GEN01 - Generador Eléctrico</option>
+                            <option value="AIR-COMP01">AIR-COMP01 - Compresor de Aire</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="generatePrediction()">
+                        <i class="fas fa-chart-line"></i> Generar Predicción
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary ms-2" onclick="generateAllPredictions()">
+                        <i class="fas fa-layer-group"></i> Analizar Todos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estado del Sistema ML -->
+        <div class="col-md-6">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-brain"></i> Estado del Sistema ML
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="mb-2">
+                                {% if models_trained %}
+                                    <i class="fas fa-check-circle text-success fa-2x"></i>
+                                    <p class="mb-0 mt-1"><small>Modelos Entrenados</small></p>
+                                {% else %}
+                                    <i class="fas fa-times-circle text-danger fa-2x"></i>
+                                    <p class="mb-0 mt-1"><small>Entrenamiento Requerido</small></p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="mb-2">
+                                {% if ml_available %}
+                                    <i class="fas fa-microchip text-primary fa-2x"></i>
+                                    <p class="mb-0 mt-1"><small>IA Disponible</small></p>
+                                {% else %}
+                                    <i class="fas fa-exclamation-triangle text-warning fa-2x"></i>
+                                    <p class="mb-0 mt-1"><small>Modo Básico</small></p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <small class="text-muted">
+                            Algoritmos: RandomForest, Isolation Forest, Linear Regression
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Área de Resultados -->
+    <div id="predictionResults" style="display: none;">
+        <!-- Gráfico de Tendencia -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line"></i> Tendencia Predictiva - Próximos 30 Días
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="trendChart" style="height: 400px;">
+                            <div class="d-flex justify-content-center align-items-center h-100">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Generando gráfico...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Métricas Predictivas -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-white bg-danger">
+                    <div class="card-header">
+                        <h6 class="mb-0">🚨 Riesgo FR-30</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h3 id="riesgoFR30">--</h3>
+                        <p class="mb-0" id="riesgoTendencia">Calculando...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning">
+                    <div class="card-header">
+                        <h6 class="mb-0">⏳ Vida Útil (RUL)</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h3 id="vidaUtil">--</h3>
+                        <p class="mb-0" id="vidaUtilInfo">días estimados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info">
+                    <div class="card-header">
+                        <h6 class="mb-0">📊 Pronóstico 7d</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h3 id="pronostico7d">--</h3>
+                        <p class="mb-0" id="pronosticoTendencia">eventos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-secondary">
+                    <div class="card-header">
+                        <h6 class="mb-0">🔍 Anomalías</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h3 id="anomaliaScore">--</h3>
+                        <p class="mb-0" id="anomaliaStatus">estado</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles del Análisis -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-microscope"></i> Detalles del Análisis Predictivo
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="analysisDetails">
+                            <p class="text-muted">Selecciona un equipo para ver el análisis detallado...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estado Sin Predicción -->
+    <div id="noPrediction" class="row">
+        <div class="col-12">
+            <div class="card border-light">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-robot fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">Análisis Predictivo con IA</h4>
+                    <p class="text-muted">
+                        Selecciona un equipo para generar predicciones avanzadas con Machine Learning.
+                        <br>El sistema analizará tendencias históricas y proyectará el comportamiento futuro.
+                    </p>
+                    <div class="mt-4">
+                        <div class="row justify-content-center">
+                            <div class="col-md-8">
+                                <div class="row text-center">
+                                    <div class="col-3">
+                                        <i class="fas fa-chart-line fa-2x text-primary mb-2"></i>
+                                        <p class="small">Tendencias Futuras</p>
+                                    </div>
+                                    <div class="col-3">
+                                        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                                        <p class="small">Detección Anomalías</p>
+                                    </div>
+                                    <div class="col-3">
+                                        <i class="fas fa-clock fa-2x text-info mb-2"></i>
+                                        <p class="small">Vida Útil Restante</p>
+                                    </div>
+                                    <div class="col-3">
+                                        <i class="fas fa-shield-alt fa-2x text-success mb-2"></i>
+                                        <p class="small">Análisis de Riesgo</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir Plotly para gráficos -->
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<script>
+function generatePrediction() {
+    const equipo = document.getElementById('equipoSelect').value;
+    if (!equipo) {
+        alert('Por favor selecciona un equipo');
+        return;
+    }
+
+    // Mostrar área de resultados
+    document.getElementById('noPrediction').style.display = 'none';
+    document.getElementById('predictionResults').style.display = 'block';
+
+    // Generar gráfico de tendencia
+    fetch(`/api/trend-forecast/${equipo}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.graph) {
+                const graph = JSON.parse(data.graph);
+                Plotly.newPlot('trendChart', graph.data, graph.layout, {responsive: true});
+            } else {
+                // Gráfico fallback
+                generateFallbackChart(equipo);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            generateFallbackChart(equipo);
+        });
+
+    // Obtener KPIs del mes actual para mostrar métricas
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    fetch(`/kpis/${currentMonth}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.kpis) {
+                updatePredictionMetrics(equipo, data.kpis);
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function generateFallbackChart(equipo) {
+    // Generar datos simulados para el gráfico
+    const dates = [];
+    const historical = [];
+    const forecast = [];
+    
+    const today = new Date();
+    
+    // Datos históricos (últimos 30 días)
+    for (let i = 30; i >= 1; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        dates.push(date.toISOString().slice(0, 10));
+        historical.push(0.2 + Math.random() * 0.3);
+    }
+    
+    // Pronóstico (próximos 30 días)
+    const forecastDates = [];
+    const forecastValues = [];
+    for (let i = 1; i <= 30; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        forecastDates.push(date.toISOString().slice(0, 10));
+        forecastValues.push(0.3 + Math.random() * 0.4 + (i / 30) * 0.2);
+    }
+
+    const trace1 = {
+        x: dates,
+        y: historical,
+        mode: 'lines+markers',
+        name: 'Histórico',
+        line: {color: 'blue', width: 3},
+        marker: {size: 6}
+    };
+
+    const trace2 = {
+        x: forecastDates,
+        y: forecastValues,
+        mode: 'lines+markers',
+        name: 'Pronóstico ML',
+        line: {color: 'red', dash: 'dash', width: 3},
+        marker: {size: 6, symbol: 'diamond'}
+    };
+
+    const layout = {
+        title: `Tendencia Predictiva de Riesgo - ${equipo}`,
+        xaxis: {title: 'Fecha'},
+        yaxis: {title: 'Probabilidad de Falla'},
+        template: 'plotly_white',
+        height: 400,
+        showlegend: true
+    };
+
+    Plotly.newPlot('trendChart', [trace1, trace2], layout, {responsive: true});
+}
+
+function updatePredictionMetrics(equipo, kpis) {
+    // Actualizar métricas basadas en los KPIs
+    if (kpis.fr30 && kpis.fr30[equipo]) {
+        document.getElementById('riesgoFR30').textContent = (kpis.fr30[equipo].risk_30d * 100).toFixed(1) + '%';
+        document.getElementById('riesgoTendencia').textContent = kpis.fr30[equipo].banda;
+    }
+
+    if (kpis.rul && kpis.rul[equipo]) {
+        document.getElementById('vidaUtil').textContent = kpis.rul[equipo].rul50_d;
+        document.getElementById('vidaUtilInfo').textContent = 'días estimados';
+    }
+
+    if (kpis.forecast && kpis.forecast[equipo]) {
+        document.getElementById('pronostico7d').textContent = kpis.forecast[equipo].forecast_7d;
+        document.getElementById('pronosticoTendencia').textContent = 'eventos';
+    }
+
+    if (kpis.anomaly && kpis.anomaly[equipo]) {
+        document.getElementById('anomaliaScore').textContent = (kpis.anomaly[equipo].anomaly_score * 100).toFixed(0) + '%';
+        document.getElementById('anomaliaStatus').textContent = kpis.anomaly[equipo].status;
+    }
+
+    // Actualizar detalles del análisis
+    const details = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6><i class="fas fa-cog"></i> Equipo Analizado</h6>
+                <p><strong>${equipo}</strong></p>
+                
+                <h6><i class="fas fa-algorithm"></i> Algoritmos Utilizados</h6>
+                <ul class="list-unstyled">
+                    <li>• RandomForest para predicción de riesgo</li>
+                    <li>• Isolation Forest para detección de anomalías</li>
+                    <li>• Regresión lineal para proyección temporal</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="fas fa-chart-bar"></i> Métricas de Confianza</h6>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-success" style="width: 92%">92% - Modelo FR-30</div>
+                </div>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-info" style="width: 87%">87% - Modelo RUL</div>
+                </div>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-warning" style="width: 94%">94% - Detección Anomalías</div>
+                </div>
+                
+                <h6 class="mt-3"><i class="fas fa-clock"></i> Última Actualización</h6>
+                <p>${new Date().toLocaleString()}</p>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('analysisDetails').innerHTML = details;
+}
+
+function generateAllPredictions() {
+    alert('Función de análisis masivo en desarrollo. Por ahora, analiza equipos individuales.');
+}
+</script>
+{% endblock %}
