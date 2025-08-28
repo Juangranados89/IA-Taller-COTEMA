@@ -328,13 +328,14 @@
 
 {% block extra_js %}
 <script>
-    // Upload form validation and loading
+    // Upload form with AJAX
     document.getElementById('uploadForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
         const fileInput = document.getElementById('file');
         const uploadBtn = document.getElementById('uploadBtn');
         
         if (fileInput.files.length === 0) {
-            e.preventDefault();
             alert('Por favor, selecciona un archivo.');
             return;
         }
@@ -342,6 +343,37 @@
         // Show loading state
         uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
         uploadBtn.disabled = true;
+        
+        // Create FormData
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        // Upload with fetch
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show success message
+                alert(`✅ Archivo procesado exitosamente!\n\nEstadísticas:\n- Total registros: ${data.stats.total_registros}\n- Equipos únicos: ${data.stats.equipos_unicos}\n- Columnas encontradas: ${data.stats.columnas_encontradas.length}`);
+                
+                // Redirect to dashboard
+                window.location.href = '/dashboard';
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error procesando archivo: ' + error.message);
+        })
+        .finally(() => {
+            // Reset button
+            uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Cargar y Procesar';
+            uploadBtn.disabled = false;
+        });
     });
     
     function showUploadForm() {
