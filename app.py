@@ -705,68 +705,19 @@ def upload_file():
                     
                 except Exception as e:
                     print(f"❌ Error cargando con pandas: {str(e)}")
-                    set_progress_error(f'Error cargando archivo: {str(e)}')
-                    return jsonify({'error': f'Error cargando archivo: {str(e)}'}), 500
-            
-            # Fallback sin ML - solo cargar archivo
-            try:
-                print(f"📁 Fallback: Cargando archivo con openpyxl: {filepath}")
-                update_progress("Cargando archivo (básico)", 3, 4, "Cargando archivo...")
-                
-                # Verificar que openpyxl esté disponible
-                try:
-                    import openpyxl
-                except ImportError as ie:
-                    print(f"❌ openpyxl no disponible: {ie}")
-                    return jsonify({'error': 'openpyxl no está disponible. No se puede procesar archivo Excel.'}), 500
-                
-                wb = openpyxl.load_workbook(filepath)
-                sheet = wb.active
-                data = []
-                for row in sheet.iter_rows(values_only=True):
-                    if row:  # Evitar filas vacías
-                        data.append(row)
-                
-                print(f"✅ Archivo cargado con openpyxl. Filas: {len(data)}")
-                
-                global_data['file_path'] = filepath
-                global_data['file_name'] = filename
-                global_data['processed_date'] = datetime.now()
-                global_data['ml_models_trained'] = False
-                
-                basic_stats = {
-                    'total_registros': len(data),
-                    'file_loaded': True,
-                    'needs_analysis': True,
-                    'ml_available': False
-                }
-                
-                global_data['stats'] = basic_stats
-                
-                update_progress("Archivo cargado", 4, 4, f"Archivo {filename} cargado. Listo para análisis.")
-                
-                return jsonify({
-                    'success': True,
-                    'message': f'Archivo {filename} cargado. ML no disponible, solo análisis básico.',
-                    'stats': basic_stats,
-                    'file_ready': True,
-                    'requires_analysis': True
-                })
-                
-            except Exception as e:
-                print(f"❌ Error en fallback openpyxl: {str(e)}")
-                set_progress_error(f'Error cargando archivo: {str(e)}')
-                return jsonify({'error': f'Error cargando archivo: {str(e)}'}), 500
+                    set_progress_error(f'Error al leer el archivo Excel: {str(e)}')
+                    return jsonify({'error': f'Error al leer el archivo Excel: {str(e)}'}), 500
         
         else:
+            set_progress_error('Formato no soportado. Use .xlsx o .xls')
             return jsonify({'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
         
     except Exception as e:
         print(f"❌ Error general en upload_file: {str(e)}")
         import traceback
         traceback.print_exc()
-        set_progress_error(f'Error: {str(e)}')
-        return jsonify({'error': f'Error: {str(e)}'}), 500
+        set_progress_error(f'Error inesperado en el servidor: {str(e)}')
+        return jsonify({'error': f'Error inesperado en el servidor: {str(e)}'}), 500
 
 @app.route('/quick-analysis', methods=['POST'])
 def quick_analysis():
