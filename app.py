@@ -676,14 +676,43 @@ def upload_file():
             
             update_progress("Cargando archivo", 3, 4, "Cargando archivo en memoria...")
             
-            # Solo cargar el archivo, SIN análisis automático
+            # Lógica de carga de archivo con múltiples intentos (fallback)
             try:
                 if not pd:
                     raise ImportError("La librería pandas no está instalada en el servidor.")
 
-                print(f"📁 Cargando archivo con pandas: {filepath}")
-                # Especificar la hoja, filas a saltar y columnas a usar
-                df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y')
+                df = None
+                error_messages = []
+
+                # Intento 1: El más específico
+                try:
+                    print("Cargando archivo - Intento 1 (específico: REG, B:Y, skip 4)")
+                    df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y')
+                    print("✅ Éxito en Intento 1")
+                except Exception as e1:
+                    error_messages.append(f"Intento 1 fallido: {e1}")
+                    
+                    # Intento 2: Menos específico
+                    try:
+                        print("Cargando archivo - Intento 2 (semi-específico: REG, skip 4)")
+                        df = pd.read_excel(filepath, sheet_name='REG', skiprows=4)
+                        print("✅ Éxito en Intento 2")
+                    except Exception as e2:
+                        error_messages.append(f"Intento 2 fallido: {e2}")
+                        
+                        # Intento 3: Genérico
+                        try:
+                            print("Cargando archivo - Intento 3 (genérico)")
+                            df = pd.read_excel(filepath)
+                            print("✅ Éxito en Intento 3")
+                        except Exception as e3:
+                            error_messages.append(f"Intento 3 fallido: {e3}")
+                            # Todos los intentos fallaron
+                            final_error = f"No se pudo leer el archivo Excel después de 3 intentos. Errores: {'; '.join(error_messages)}"
+                            print(f"❌ {final_error}")
+                            set_progress_error(final_error)
+                            return jsonify({'error': final_error}), 500
+                
                 df = df.dropna(how='all')
                 print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
                 
