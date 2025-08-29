@@ -71,6 +71,128 @@
     </div>
     {% endif %}
 
+    <!-- Modal de Progreso de Carga -->
+    <div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="progressModalLabel">
+                        <i class="fas fa-cogs fa-spin"></i>
+                        Procesando Archivo y Entrenando Modelos IA
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span id="currentTask" class="fw-bold">Iniciando procesamiento...</span>
+                            <span id="progressPercent" class="badge bg-primary">0%</span>
+                        </div>
+                        <div class="progress mb-3" style="height: 25px;">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                        <div id="progressMessage" class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            Preparando el sistema para procesar tu archivo...
+                        </div>
+                    </div>
+
+                    <!-- Pasos del proceso -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="mb-3">Progreso del Proceso:</h6>
+                            <div class="list-group">
+                                <div class="list-group-item d-flex align-items-center" id="step-1">
+                                    <div class="step-icon me-3">
+                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
+                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">1. Validando archivo</div>
+                                        <small class="text-muted">Verificando formato y contenido</small>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex align-items-center" id="step-2">
+                                    <div class="step-icon me-3">
+                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
+                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">2. Guardando archivo</div>
+                                        <small class="text-muted">Almacenando datos de manera segura</small>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex align-items-center" id="step-3">
+                                    <div class="step-icon me-3">
+                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
+                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">3. Procesando Excel</div>
+                                        <small class="text-muted">Extrayendo y limpiando datos</small>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex align-items-center" id="step-4">
+                                    <div class="step-icon me-3">
+                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
+                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">4. Entrenando modelos IA</div>
+                                        <small class="text-muted">FR-30, RUL y detección de anomalías</small>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex align-items-center" id="step-5">
+                                    <div class="step-icon me-3">
+                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
+                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">5. Analizando datos</div>
+                                        <small class="text-muted">Generando estadísticas y métricas</small>
+                                    </div>
+                                </div>
+                                <div class="list-group-item d-flex align-items-center" id="step-6">
+                                    <div class="step-icon me-3">
+                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
+                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">6. Finalizando</div>
+                                        <small class="text-muted">Preparando dashboard y visualizaciones</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="errorSection" class="alert alert-danger mt-3" style="display: none;">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Error en el procesamiento</h6>
+                        <p id="errorMessage"></p>
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="hideProgressModal()">
+                            Cerrar y reintentar
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div id="successSection" style="display: none;">
+                        <button type="button" class="btn btn-success" onclick="redirectToDashboard()">
+                            <i class="fas fa-chart-line"></i>
+                            Ir al Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if data_loaded %}
     <!-- Data Status Section -->
     <div class="row mb-4">
@@ -328,27 +450,37 @@
 
 {% block extra_js %}
 <script>
-    // Upload form with AJAX
-    document.getElementById('uploadForm')?.addEventListener('submit', function(e) {
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 COTEMA Analytics - DOM loaded');
+    
+    // Verificar que los elementos existen
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const progressModal = document.getElementById('progressModal');
+    
+    console.log('Form found:', !!uploadForm);
+    console.log('Button found:', !!uploadBtn);
+    console.log('Modal found:', !!progressModal);
+    
+    if (!uploadForm) {
+        console.error('❌ Upload form not found!');
+        return;
+    }
+    
+    // Manejar envío del formulario de upload
+    uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        console.log('📤 Form submitted, starting upload process...');
         
-        const fileInput = document.getElementById('file');
-        const uploadBtn = document.getElementById('uploadBtn');
+        const formData = new FormData(this);
         
-        if (fileInput.files.length === 0) {
-            alert('Por favor, selecciona un archivo.');
-            return;
-        }
+        // Mostrar modal de progreso
+        showProgressModal();
         
-        // Show loading state
-        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
-        uploadBtn.disabled = true;
+        // Iniciar monitoreo de progreso
+        startProgressMonitoring();
         
-        // Create FormData
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        
-        // Upload with fetch
+        // Enviar archivo
         fetch('/upload', {
             method: 'POST',
             body: formData
@@ -356,29 +488,169 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Show success message
-                alert(`✅ Archivo procesado exitosamente!\n\nEstadísticas:\n- Total registros: ${data.stats.total_registros}\n- Equipos únicos: ${data.stats.equipos_unicos}\n- Columnas encontradas: ${data.stats.columnas_encontradas.length}`);
-                
-                // Redirect to dashboard
-                window.location.href = '/dashboard';
+                showSuccessCompletion(data);
             } else {
-                alert('❌ Error: ' + data.error);
+                showError(data.error || 'Error desconocido en el procesamiento');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('❌ Error procesando archivo: ' + error.message);
-        })
-        .finally(() => {
-            // Reset button
-            uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Cargar y Procesar';
-            uploadBtn.disabled = false;
+            showError('Error de conexión: ' + error.message);
         });
     });
+    
+    let progressInterval;
+    
+    function showProgressModal() {
+        const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+        modal.show();
+        resetProgressSteps();
+    }
+    
+    function hideProgressModal() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
+        if (modal) {
+            modal.hide();
+        }
+        if (progressInterval) {
+            clearInterval(progressInterval);
+        }
+    }
+    
+    function startProgressMonitoring() {
+        progressInterval = setInterval(updateProgress, 500); // Actualizar cada 500ms
+        updateProgress(); // Actualización inmediata
+    }
+    
+    function updateProgress() {
+        fetch('/api/progress')
+            .then(response => response.json())
+            .then(data => {
+                updateProgressBar(data.progress);
+                updateCurrentTask(data.current_task, data.message);
+                updateProgressSteps(data.current_step, data.total_steps);
+                
+                if (data.error) {
+                    showError(data.error);
+                } else if (!data.is_processing && data.progress === 100) {
+                    // El procesamiento se completó exitosamente
+                    clearInterval(progressInterval);
+                }
+            })
+            .catch(error => {
+                console.error('Error monitoring progress:', error);
+            });
+    }
+    
+    function updateProgressBar(progress) {
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        
+        progressBar.style.width = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+        progressPercent.textContent = progress + '%';
+        
+        if (progress === 100) {
+            progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            progressBar.classList.add('bg-success');
+        }
+    }
+    
+    function updateCurrentTask(task, message) {
+        document.getElementById('currentTask').textContent = task || 'Procesando...';
+        document.getElementById('progressMessage').innerHTML = 
+            '<i class="fas fa-info-circle"></i> ' + (message || 'Trabajando en el proceso...');
+    }
+    
+    function updateProgressSteps(currentStep, totalSteps) {
+        for (let i = 1; i <= 6; i++) {
+            const stepElement = document.getElementById(`step-${i}`);
+            const icons = stepElement.querySelectorAll('.step-icon i');
+            const [spinIcon, checkIcon, defaultIcon] = icons;
+            
+            // Ocultar todos los iconos
+            icons.forEach(icon => icon.style.display = 'none');
+            
+            if (i < currentStep) {
+                // Paso completado
+                checkIcon.style.display = 'inline';
+                stepElement.classList.add('list-group-item-success');
+            } else if (i === currentStep) {
+                // Paso actual
+                spinIcon.style.display = 'inline';
+                stepElement.classList.add('list-group-item-primary');
+            } else {
+                // Paso pendiente
+                defaultIcon.style.display = 'inline';
+                stepElement.classList.remove('list-group-item-success', 'list-group-item-primary');
+            }
+        }
+    }
+    
+    function resetProgressSteps() {
+        for (let i = 1; i <= 6; i++) {
+            const stepElement = document.getElementById(`step-${i}`);
+            const icons = stepElement.querySelectorAll('.step-icon i');
+            const [spinIcon, checkIcon, defaultIcon] = icons;
+            
+            // Mostrar solo el icono por defecto
+            icons.forEach(icon => icon.style.display = 'none');
+            defaultIcon.style.display = 'inline';
+            
+            // Remover clases de estado
+            stepElement.classList.remove('list-group-item-success', 'list-group-item-primary', 'list-group-item-danger');
+        }
+        
+        // Ocultar secciones de error y éxito
+        document.getElementById('errorSection').style.display = 'none';
+        document.getElementById('successSection').style.display = 'none';
+    }
+    
+    function showError(errorMessage) {
+        clearInterval(progressInterval);
+        
+        document.getElementById('errorMessage').textContent = errorMessage;
+        document.getElementById('errorSection').style.display = 'block';
+        
+        // Actualizar barra de progreso para mostrar error
+        const progressBar = document.getElementById('progressBar');
+        progressBar.classList.remove('bg-success', 'progress-bar-striped', 'progress-bar-animated');
+        progressBar.classList.add('bg-danger');
+        
+        document.getElementById('currentTask').textContent = 'Error en el procesamiento';
+        document.getElementById('progressMessage').innerHTML = 
+            '<i class="fas fa-exclamation-triangle"></i> Se produjo un error durante el procesamiento.';
+    }
+    
+    function showSuccessCompletion(data) {
+        clearInterval(progressInterval);
+        
+        // Completar todos los pasos
+        updateProgressSteps(7, 6);
+        updateProgressBar(100);
+        
+        document.getElementById('currentTask').textContent = 'Procesamiento completado exitosamente';
+        document.getElementById('progressMessage').innerHTML = 
+            '<i class="fas fa-check-circle text-success"></i> Archivo procesado y modelos IA entrenados correctamente.';
+        
+        // Mostrar botón de éxito
+        document.getElementById('successSection').style.display = 'block';
+        
+        // Auto-redirigir después de 3 segundos
+        setTimeout(() => {
+            redirectToDashboard();
+        }, 3000);
+    }
+    
+    function redirectToDashboard() {
+        window.location.href = '/dashboard';
+    }
     
     function showUploadForm() {
         const modal = new bootstrap.Modal(document.getElementById('reloadUploadForm'));
         modal.show();
     }
+    
+}); // Cierre del DOMContentLoaded
 </script>
 {% endblock %}

@@ -6,7 +6,51 @@
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex jus    // Validar que los datos existen antes de procesarlos
+    if (!data || !data.kpis) {
+        console.error('Datos de KPIs no disponibles');
+        document.getElementById('kpisContent').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                No hay datos de KPIs disponibles. Por favor, carga un archivo Excel primero.
+            </div>
+        `;
+        return;
+    }
+
+    // Asegurar que todas las propiedades existan
+    data.kpis.fr30 = data.kpis.fr30 || {};
+    data.kpis.rul = data.kpis.rul || {};
+    data.kpis.forecast = data.kpis.forecast || {};
+    data.kpis.anomaly = data.kpis.anomaly || {};
+
+    let html = `
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">⚠️ FR-30 (Riesgo 30 días)</h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr><th>Equipo</th><th>Riesgo</th><th>Estado</th></tr>
+                                </thead>
+                                <tbody>
+    `;
+    
+    const fr30Keys = Object.keys(data.kpis.fr30);
+    if (fr30Keys.length > 0) {
+        fr30Keys.slice(0, 8).forEach(equipo => {
+            const fr30 = data.kpis.fr30[equipo];
+            if (fr30) {
+                html += `<tr><td><small>${equipo}</small></td><td><small>${fr30.risk_percentage}</small></td><td><span class="badge bg-${fr30.badge_color} badge-sm">${fr30.status}</span></td></tr>`;
+            }
+        });
+    } else {
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+    } align-items-center">
                 <div>
                     <h2 class="mb-0">📊 Dashboard de Análisis</h2>
                     <p class="text-muted">Análisis de KPIs con Inteligencia Artificial</p>
@@ -214,6 +258,26 @@ function analizarMes() {
 }
 
 function mostrarResultados(data) {
+    // Validar que los datos existen antes de procesarlos
+    if (!data || !data.kpis) {
+        console.error('Datos de KPIs no disponibles');
+        document.getElementById('estadoAnalisis').innerHTML = `
+            <div class="alert alert-warning" role="alert">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>No hay datos de KPIs disponibles</strong><br>
+                <small>Por favor, carga un archivo Excel primero.</small>
+            </div>
+        `;
+        return;
+    }
+
+    // Asegurar que todas las propiedades existan
+    data.kpis = data.kpis || {};
+    data.kpis.fr30 = data.kpis.fr30 || {};
+    data.kpis.rul = data.kpis.rul || {};
+    data.kpis.forecast = data.kpis.forecast || {};
+    data.kpis.anomaly = data.kpis.anomaly || {};
+
     document.getElementById('estadoAnalisis').innerHTML = `
         <div class="alert alert-success mb-0" role="alert">
             <i class="fas fa-check-circle"></i>
@@ -251,10 +315,17 @@ function mostrarResultados(data) {
                                 <tbody>
     `;
     
-    Object.keys(data.kpis.fr30).slice(0, 8).forEach(equipo => {
-        const fr30 = data.kpis.fr30[equipo];
-        html += `<tr><td><small>${equipo}</small></td><td><small>${(fr30.risk_30d * 100).toFixed(1)}%</small></td><td><span class="badge bg-${fr30.banda_color} badge-sm">${fr30.banda}</span></td></tr>`;
-    });
+    const fr30Keys = Object.keys(data.kpis.fr30 || {});
+    if (fr30Keys.length > 0) {
+        fr30Keys.slice(0, 8).forEach(equipo => {
+            const fr30 = data.kpis.fr30[equipo];
+            if (fr30) {
+                html += `<tr><td><small>${equipo}</small></td><td><small>${(fr30.risk_30d * 100).toFixed(1)}%</small></td><td><span class="badge bg-${fr30.banda_color} badge-sm">${fr30.banda}</span></td></tr>`;
+            }
+        });
+    } else {
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+    }
     
     html += `
                                 </tbody>
@@ -278,10 +349,17 @@ function mostrarResultados(data) {
                                 <tbody>
     `;
     
-    Object.keys(data.kpis.rul).slice(0, 8).forEach(equipo => {
-        const rul = data.kpis.rul[equipo];
-        html += `<tr><td><small>${equipo}</small></td><td><small>${rul.rul50_d}d</small></td><td><small>${rul.rul90_d}d</small></td></tr>`;
-    });
+    const rulKeys = Object.keys(data.kpis.rul || {});
+    if (rulKeys.length > 0) {
+        rulKeys.slice(0, 8).forEach(equipo => {
+            const rul = data.kpis.rul[equipo];
+            if (rul) {
+                html += `<tr><td><small>${equipo}</small></td><td><small>${rul.rul50_d}d</small></td><td><small>${rul.rul90_d}d</small></td></tr>`;
+            }
+        });
+    } else {
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+    }
     
     html += `
                                 </tbody>
@@ -305,10 +383,17 @@ function mostrarResultados(data) {
                                 <tbody>
     `;
     
-    Object.keys(data.kpis.forecast).slice(0, 8).forEach(equipo => {
-        const forecast = data.kpis.forecast[equipo];
-        html += `<tr><td><small>${equipo}</small></td><td><small>${forecast.forecast_7d}</small></td><td><small>${forecast.forecast_30d}</small></td></tr>`;
-    });
+    const forecastKeys = Object.keys(data.kpis.forecast || {});
+    if (forecastKeys.length > 0) {
+        forecastKeys.slice(0, 8).forEach(equipo => {
+            const forecast = data.kpis.forecast[equipo];
+            if (forecast) {
+                html += `<tr><td><small>${equipo}</small></td><td><small>${forecast.forecast_7d}</small></td><td><small>${forecast.forecast_30d}</small></td></tr>`;
+            }
+        });
+    } else {
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+    }
     
     html += `
                                 </tbody>
@@ -332,10 +417,17 @@ function mostrarResultados(data) {
                                 <tbody>
     `;
     
-    Object.keys(data.kpis.anomaly).slice(0, 8).forEach(equipo => {
-        const anomaly = data.kpis.anomaly[equipo];
-        html += `<tr><td><small>${equipo}</small></td><td><small>${(anomaly.anomaly_score * 100).toFixed(0)}%</small></td><td><span class="badge bg-${anomaly.badge_color} badge-sm">${anomaly.status}</span></td></tr>`;
-    });
+    const anomalyKeys = Object.keys(data.kpis.anomaly || {});
+    if (anomalyKeys.length > 0) {
+        anomalyKeys.slice(0, 8).forEach(equipo => {
+            const anomaly = data.kpis.anomaly[equipo];
+            if (anomaly) {
+                html += `<tr><td><small>${equipo}</small></td><td><small>${(anomaly.anomaly_score * 100).toFixed(0)}%</small></td><td><span class="badge bg-${anomaly.badge_color} badge-sm">${anomaly.status}</span></td></tr>`;
+            }
+        });
+    } else {
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+    }
     
     html += `
                                 </tbody>
