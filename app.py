@@ -6,6 +6,7 @@ import json
 import random
 import hashlib
 import math
+import logging
 
 # Importaciones condicionales de ML - con manejo robusto de errores
 ML_AVAILABLE = False
@@ -26,24 +27,23 @@ except Exception as e:
     print(f"❌ Error loading ML libraries: {e}")
     ML_AVAILABLE = False
 
+# Configuración de logging
+logging.basicConfig(level=logging.INFO)
+
+# Inicialización de la aplicación Flask
 app = Flask(__name__)
-app.secret_key = 'cotema-2025'
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+app.secret_key = os.urandom(24)
 
-# Crear carpetas necesarias
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Configuración de la carga de archivos
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'xlsx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Variable global para almacenar los datos procesados
+# Almacenamiento en memoria para datos y estado de la aplicación
 global_data = {
     'df': None,
-    'processed_date': None,
-    'stats': {},
-    'ml_models': {},
-    'predictions': {}
-}
-
-# Estado global para progreso de carga y entrenamiento
+    'file_path': None,
+    'file_name': None,
 progress_state = {
     'current_task': '',
     'progress': 0,
