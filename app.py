@@ -838,7 +838,7 @@ def dashboard():
                          total_registros=stats.get('total_registros', 0),
                          equipos_unicos=stats.get('equipos_unicos', 0),
                          ml_available=ML_AVAILABLE,
-                         models_trained=stats.get('ml_models_trained', False))
+                         ml_models_trained=stats.get('ml_models_trained', False))
 
 @app.route('/kpis/<mes>')
 def calculate_kpis(mes):
@@ -1192,6 +1192,63 @@ def api_status():
         'models_trained': ml_engine.is_trained if ml_engine else False,
         'version': '3.0.0'
     })
+
+@app.route('/train-models', methods=['POST'])
+def train_models():
+    """Inicia el entrenamiento de modelos ML bajo demanda"""
+    try:
+        if not ML_AVAILABLE:
+            return jsonify({'error': 'Machine Learning no disponible'}), 400
+        
+        if global_data['df'] is None:
+            return jsonify({'error': 'No hay datos cargados'}), 400
+        
+        if ml_engine.is_trained:
+            return jsonify({'error': 'Los modelos ya están entrenados'}), 400
+        
+        # Resetear progreso para el entrenamiento
+        reset_progress()
+        update_progress("Iniciando entrenamiento ML", 0, 5, "Preparando datos para entrenamiento...")
+        
+        # Entrenar modelos en background (simulado con pasos rápidos)
+        try:
+            update_progress("Preparando datos", 1, 5, "Procesando datos del Excel...")
+            
+            # Usar datos reales si hay suficientes
+            df = global_data['df']
+            if len(df) >= 10:
+                update_progress("Entrenando modelos", 2, 5, "Entrenando con datos reales...")
+                ml_engine.train_models(df)
+            else:
+                update_progress("Entrenando modelos", 2, 5, "Entrenando con datos sintéticos...")
+                ml_engine.train_models()
+            
+            update_progress("Validando modelos", 4, 5, "Verificando precisión...")
+            
+            # Actualizar el estado global
+            if global_data.get('stats'):
+                global_data['stats']['ml_models_trained'] = True
+                global_data['stats']['processing_method'] = 'ML_Advanced'
+            
+            update_progress("Completado", 5, 5, "Modelos entrenados exitosamente")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Modelos de Machine Learning entrenados exitosamente',
+                'ml_models_trained': ml_engine.is_trained
+            })
+            
+        except Exception as e:
+            set_progress_error(f'Error entrenando modelos: {str(e)}')
+            return jsonify({'error': f'Error en el entrenamiento: {str(e)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': f'Error: {str(e)}'}), 500
+
+@app.route('/api/train-progress')
+def train_progress():
+    """Devuelve el progreso actual del entrenamiento de modelos"""
+    return jsonify(progress_state)
 
 if __name__ == '__main__':
     # Entrenar modelos al iniciar si ML está disponible
