@@ -2,3 +2,7 @@ Flask==2.3.3
 gunicorn==21.2.0
 Werkzeug==2.3.7
 openpyxl>=3.0.0
+pandas
+numpy
+scikit-learn
+plotly
