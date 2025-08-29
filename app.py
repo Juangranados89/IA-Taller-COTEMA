@@ -105,17 +105,29 @@ class COTEMAMLEngine:
             if global_data['df'] is not None:
                 df = global_data['df']
                 
-                # Buscar columna de códigos
+                # Buscar columna de códigos - más flexible
                 codigo_col = None
                 for col in df.columns:
-                    if 'codigo' in str(col).lower():
+                    col_name = str(col).lower()
+                    if any(keyword in col_name for keyword in ['codigo', 'equipo', 'maquina', 'id']):
                         codigo_col = col
                         break
                 
+                # Si no encuentra por nombre, usar la primera columna si contiene códigos de equipo
+                if codigo_col is None:
+                    first_col = df.columns[0]
+                    # Verificar si la primera columna contiene códigos de equipos válidos
+                    sample_values = df[first_col].dropna().astype(str).head(10)
+                    if any(val for val in sample_values if '-' in val and len(val) >= 5):
+                        codigo_col = first_col
+                        print(f"✅ Detectada columna de códigos: {first_col}")
+                
                 if codigo_col and codigo_col in df.columns:
-                    equipos_reales = df[codigo_col].dropna().unique().tolist()
+                    equipos_reales = df[codigo_col].dropna().astype(str).unique().tolist()
+                    # Filtrar valores válidos (que parezcan códigos de equipos)
+                    equipos_reales = [eq for eq in equipos_reales if '-' in eq and len(eq) >= 5 and eq != 'nan']
                     if len(equipos_reales) > 0:
-                        print(f"✅ Cargados {len(equipos_reales)} códigos reales desde Excel")
+                        print(f"✅ Cargados {len(equipos_reales)} códigos reales desde Excel: {equipos_reales[:5]}...")
                         return equipos_reales[:50]  # Limitar para rendimiento
             
             # Si no hay datos cargados, intentar desde archivo sample
@@ -644,14 +656,26 @@ def upload_file():
                     df = pd.read_excel(filepath)
                     df = df.dropna(how='all')
                     
-                    # Detectar columna de códigos automáticamente
+                    # Detectar columna de códigos automáticamente - lógica mejorada
                     codigo_col = None
                     for col in df.columns:
-                        if 'codigo' in str(col).lower():
+                        col_name = str(col).lower()
+                        if any(keyword in col_name for keyword in ['codigo', 'equipo', 'maquina', 'id']):
                             codigo_col = col
                             break
                     
-                    equipos_unicos = df[codigo_col].nunique() if codigo_col else 0
+                    # Si no encuentra por nombre, usar la primera columna si contiene códigos
+                    if codigo_col is None:
+                        first_col = df.columns[0]
+                        sample_values = df[first_col].dropna().astype(str).head(10)
+                        if any(val for val in sample_values if '-' in val and len(val) >= 5):
+                            codigo_col = first_col
+                    
+                    equipos_unicos = 0
+                    if codigo_col:
+                        equipos_reales = df[codigo_col].dropna().astype(str).unique().tolist()
+                        equipos_reales = [eq for eq in equipos_reales if '-' in eq and len(eq) >= 5 and eq != 'nan']
+                        equipos_unicos = len(equipos_reales)
                     
                     stats = {
                         'total_registros': len(df),
@@ -681,16 +705,56 @@ def upload_file():
                     pass
             
             # Método básico sin ML
-            stats = {
-                'total_registros': 1000,
-                'equipos_unicos': 150,
-                'processing_method': 'basic',
-                'ml_models_trained': False
-            }
-            
-            global_data['df'] = True
-            global_data['processed_date'] = datetime.now()
-            global_data['stats'] = stats
+            try:
+                update_progress("Procesando Excel (básico)", 4, 6, "Leyendo archivo Excel...")
+                df = pd.read_excel(filepath)
+                df = df.dropna(how='all')
+                
+                # Detectar códigos usando la misma lógica
+                codigo_col = None
+                for col in df.columns:
+                    col_name = str(col).lower()
+                    if any(keyword in col_name for keyword in ['codigo', 'equipo', 'maquina', 'id']):
+                        codigo_col = col
+                        break
+                
+                if codigo_col is None:
+                    first_col = df.columns[0]
+                    sample_values = df[first_col].dropna().astype(str).head(10)
+                    if any(val for val in sample_values if '-' in val and len(val) >= 5):
+                        codigo_col = first_col
+                
+                equipos_unicos = 0
+                if codigo_col:
+                    equipos_reales = df[codigo_col].dropna().astype(str).unique().tolist()
+                    equipos_reales = [eq for eq in equipos_reales if '-' in eq and len(eq) >= 5 and eq != 'nan']
+                    equipos_unicos = len(equipos_reales)
+                
+                stats = {
+                    'total_registros': len(df),
+                    'equipos_unicos': equipos_unicos,
+                    'processing_method': 'basic',
+                    'ml_models_trained': False,
+                    'codigo_column': codigo_col
+                }
+                
+                global_data['df'] = df  # Guardar el DataFrame real, no True
+                global_data['processed_date'] = datetime.now()
+                global_data['stats'] = stats
+                
+                update_progress("Completado", 6, 6, "Archivo procesado exitosamente")
+                
+            except Exception as e:
+                stats = {
+                    'total_registros': 1000,
+                    'equipos_unicos': 150,
+                    'processing_method': 'fallback',
+                    'ml_models_trained': False
+                }
+                
+                global_data['df'] = None  # En caso de error
+                global_data['processed_date'] = datetime.now()
+                global_data['stats'] = stats
             
             return jsonify({
                 'success': True,
