@@ -708,11 +708,12 @@ def upload_file():
 
                 df = None
                 error_messages = []
+                logging.info("Attempting to read Excel file...")
 
                 # Intento 1: El más específico
                 try:
                     print("Cargando archivo - Intento 1 (específico: REG, B:Y, skip 4)")
-                    df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y')
+                    df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', engine='openpyxl')
                     print("✅ Éxito en Intento 1")
                 except Exception as e1:
                     error_messages.append(f"Intento 1 fallido: {e1}")
@@ -720,7 +721,7 @@ def upload_file():
                     # Intento 2: Menos específico
                     try:
                         print("Cargando archivo - Intento 2 (semi-específico: REG, skip 4)")
-                        df = pd.read_excel(filepath, sheet_name='REG', skiprows=4)
+                        df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, engine='openpyxl')
                         print("✅ Éxito en Intento 2")
                     except Exception as e2:
                         error_messages.append(f"Intento 2 fallido: {e2}")
@@ -728,7 +729,7 @@ def upload_file():
                         # Intento 3: Genérico
                         try:
                             print("Cargando archivo - Intento 3 (genérico)")
-                            df = pd.read_excel(filepath)
+                            df = pd.read_excel(filepath, engine='openpyxl')
                             print("✅ Éxito en Intento 3")
                         except Exception as e3:
                             error_messages.append(f"Intento 3 fallido: {e3}")
@@ -738,20 +739,30 @@ def upload_file():
                             set_progress_error(final_error)
                             return jsonify({'error': final_error}), 500
                 
+                logging.info(f"Excel file read successfully. Shape: {df.shape if df is not None else 'None'}")
+
                 # ESTANDARIZAR NOMBRES DE COLUMNAS
                 if df is not None:
+                    logging.info("Sanitizing column names...")
                     df = sanitize_column_names(df)
                     print(f"✅ Columnas estandarizadas: {list(df.columns)}")
+                    logging.info("Column names sanitized.")
                 
+                logging.info("Dropping empty rows...")
                 df = df.dropna(how='all')
+                logging.info(f"Empty rows dropped. New shape: {df.shape if df is not None else 'None'}")
+                
                 print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
                 
                 # Solo guardar datos básicos del archivo
+                logging.info("Storing DataFrame in global_data...")
                 global_data['df'] = df
                 global_data['file_path'] = filepath
                 global_data['file_name'] = filename
                 global_data['processed_date'] = datetime.now()
                 global_data['ml_models_trained'] = False  # No entrenado aún
+                
+                logging.info("DataFrame stored. Preparing JSON response.")
                 
                 # Stats básicos SOLO del archivo
                 basic_stats = {
