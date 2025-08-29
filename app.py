@@ -44,6 +44,9 @@ global_data = {
     'df': None,
     'file_path': None,
     'file_name': None,
+    'ml_models_trained': False
+}
+
 progress_state = {
     'current_task': '',
     'progress': 0,
@@ -520,7 +523,7 @@ class COTEMAMLEngine:
             fig.add_hline(y=70, line_dash="dash", line_color="red", 
                          annotation_text="Umbral Crítico (70%)")
             
-            graph_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+            graph_json = json.dumps(fig, cls=PlotlyJSONEncoder)
             
             # Detalles adicionales para la tabla
             details = []
