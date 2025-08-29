@@ -645,7 +645,7 @@ def index():
 def upload_file():
     try:
         reset_progress()
-        update_progress("Validando archivo", 1, 6, "Verificando archivo seleccionado...")
+        update_progress("Validando archivo", 1, 4, "Verificando archivo seleccionado...")
         
         if 'file' not in request.files:
             set_progress_error('No se seleccionó ningún archivo')
@@ -661,6 +661,9 @@ def upload_file():
         if file and file.filename.lower().endswith(('.xlsx', '.xls')):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Crear directorio si no existe
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             file.save(filepath)
             
             update_progress("Cargando archivo", 3, 4, "Cargando archivo en memoria...")
@@ -668,8 +671,10 @@ def upload_file():
             # Solo cargar el archivo, SIN análisis automático
             if ML_AVAILABLE:
                 try:
+                    print(f"📁 Cargando archivo con pandas: {filepath}")
                     df = pd.read_excel(filepath)
                     df = df.dropna(how='all')
+                    print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
                     
                     # Solo guardar datos básicos del archivo
                     global_data['df'] = df
@@ -699,20 +704,30 @@ def upload_file():
                     })
                     
                 except Exception as e:
+                    print(f"❌ Error cargando con pandas: {str(e)}")
                     set_progress_error(f'Error cargando archivo: {str(e)}')
                     return jsonify({'error': f'Error cargando archivo: {str(e)}'}), 500
             
             # Fallback sin ML - solo cargar archivo
             try:
+                print(f"📁 Fallback: Cargando archivo con openpyxl: {filepath}")
                 update_progress("Cargando archivo (básico)", 3, 4, "Cargando archivo...")
                 
-                # Usar método básico para cargar
-                import openpyxl
+                # Verificar que openpyxl esté disponible
+                try:
+                    import openpyxl
+                except ImportError as ie:
+                    print(f"❌ openpyxl no disponible: {ie}")
+                    return jsonify({'error': 'openpyxl no está disponible. No se puede procesar archivo Excel.'}), 500
+                
                 wb = openpyxl.load_workbook(filepath)
                 sheet = wb.active
                 data = []
                 for row in sheet.iter_rows(values_only=True):
-                    data.append(row)
+                    if row:  # Evitar filas vacías
+                        data.append(row)
+                
+                print(f"✅ Archivo cargado con openpyxl. Filas: {len(data)}")
                 
                 global_data['file_path'] = filepath
                 global_data['file_name'] = filename
@@ -739,6 +754,7 @@ def upload_file():
                 })
                 
             except Exception as e:
+                print(f"❌ Error en fallback openpyxl: {str(e)}")
                 set_progress_error(f'Error cargando archivo: {str(e)}')
                 return jsonify({'error': f'Error cargando archivo: {str(e)}'}), 500
         
@@ -746,6 +762,9 @@ def upload_file():
             return jsonify({'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
         
     except Exception as e:
+        print(f"❌ Error general en upload_file: {str(e)}")
+        import traceback
+        traceback.print_exc()
         set_progress_error(f'Error: {str(e)}')
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
