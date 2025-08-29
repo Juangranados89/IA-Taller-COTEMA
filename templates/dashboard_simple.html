@@ -18,11 +18,11 @@
         return;
     }
 
-    // Asegurar que todas las propiedades existan
-    data.kpis.fr30 = data.kpis.fr30 || {};
-    data.kpis.rul = data.kpis.rul || {};
-    data.kpis.forecast = data.kpis.forecast || {};
-    data.kpis.anomaly = data.kpis.anomaly || {};
+    // Asegurar que todas las propiedades existan después de validar que data.kpis existe
+    if (!data.kpis.fr30) data.kpis.fr30 = {};
+    if (!data.kpis.rul) data.kpis.rul = {};
+    if (!data.kpis.forecast) data.kpis.forecast = {};
+    if (!data.kpis.anomaly) data.kpis.anomaly = {};
 
     let html = `
         <div class="row">
@@ -40,14 +40,22 @@
                                 <tbody>
     `;
     
-    const fr30Keys = Object.keys(data.kpis.fr30);
-    if (fr30Keys.length > 0) {
-        fr30Keys.slice(0, 8).forEach(equipo => {
-            const fr30 = data.kpis.fr30[equipo];
-            if (fr30) {
-                html += `<tr><td><small>${equipo}</small></td><td><small>${fr30.risk_percentage}</small></td><td><span class="badge bg-${fr30.badge_color} badge-sm">${fr30.status}</span></td></tr>`;
-            }
-        });
+    // Validación robusta antes de acceder a propiedades
+    if (data && data.kpis && data.kpis.fr30) {
+        const fr30Keys = Object.keys(data.kpis.fr30);
+        if (fr30Keys && fr30Keys.length > 0) {
+            fr30Keys.slice(0, 8).forEach(equipo => {
+                const fr30 = data.kpis.fr30[equipo];
+                if (fr30) {
+                    html += `<tr><td><small>${equipo}</small></td><td><small>${fr30.risk_percentage}</small></td><td><span class="badge bg-${fr30.badge_color} badge-sm">${fr30.status}</span></td></tr>`;
+                }
+            });
+        } else {
+            html += `<tr><td colspan="3" class="text-center text-muted">No hay datos FR-30 disponibles</td></tr>`;
+        }
+    } else {
+        html += `<tr><td colspan="3" class="text-center text-muted">Cargando datos FR-30...</td></tr>`;
+    }
     } else {
         html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
     } align-items-center">
@@ -258,25 +266,20 @@ function analizarMes() {
 }
 
 function mostrarResultados(data) {
-    // Validar que los datos existen antes de procesarlos
     if (!data || !data.kpis) {
-        console.error('Datos de KPIs no disponibles');
-        document.getElementById('estadoAnalisis').innerHTML = `
-            <div class="alert alert-warning" role="alert">
-                <i class="fas fa-exclamation-triangle"></i>
-                <strong>No hay datos de KPIs disponibles</strong><br>
-                <small>Por favor, carga un archivo Excel primero.</small>
+        document.getElementById('kpiContainer').innerHTML = `
+            <div class="alert alert-warning text-center">
+                No hay datos de KPIs disponibles. Por favor, carga un archivo Excel primero.
             </div>
         `;
         return;
     }
 
-    // Asegurar que todas las propiedades existan
-    data.kpis = data.kpis || {};
-    data.kpis.fr30 = data.kpis.fr30 || {};
-    data.kpis.rul = data.kpis.rul || {};
-    data.kpis.forecast = data.kpis.forecast || {};
-    data.kpis.anomaly = data.kpis.anomaly || {};
+    // Asegurar que todas las propiedades existan después de validar que data.kpis existe
+    if (!data.kpis.fr30) data.kpis.fr30 = {};
+    if (!data.kpis.rul) data.kpis.rul = {};
+    if (!data.kpis.forecast) data.kpis.forecast = {};
+    if (!data.kpis.anomaly) data.kpis.anomaly = {};
 
     document.getElementById('estadoAnalisis').innerHTML = `
         <div class="alert alert-success mb-0" role="alert">

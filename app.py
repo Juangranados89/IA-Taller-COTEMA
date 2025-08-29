@@ -765,8 +765,9 @@ def calculate_kpis(mes):
                     
                     kpis['fr30'][equipo] = {
                         'risk_30d': round(risk, 3),
-                        'banda': banda,
-                        'banda_color': banda_color,
+                        'risk_percentage': f"{round(risk * 100, 1)}%",
+                        'status': banda,
+                        'badge_color': banda_color,
                         'confidence': round(prediction['confidence'], 2),
                         'explicacion': f'RandomForest ML - Predicción para {equipo}'
                     }
@@ -821,8 +822,9 @@ def calculate_kpis(mes):
                 
                 kpis['fr30'][equipo] = {
                     'risk_30d': round(base_risk, 3),
-                    'banda': banda,
-                    'banda_color': banda_color,
+                    'risk_percentage': f"{round(base_risk * 100, 1)}%",
+                    'status': banda,
+                    'badge_color': banda_color,
                     'confidence': round(random.uniform(0.75, 0.95), 2),
                     'explicacion': f'Simulación estadística - {equipo}'
                 }
