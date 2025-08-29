@@ -77,14 +77,14 @@
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title" id="progressModalLabel">
-                        <i class="fas fa-cogs fa-spin"></i>
-                        Procesando Archivo y Entrenando Modelos IA
+                        <i class="fas fa-upload fa-spin"></i>
+                        Cargando Archivo Excel
                     </h5>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span id="currentTask" class="fw-bold">Iniciando procesamiento...</span>
+                            <span id="currentTask" class="fw-bold">Iniciando carga...</span>
                             <span id="progressPercent" class="badge bg-primary">0%</span>
                         </div>
                         <div class="progress mb-3" style="height: 25px;">
@@ -94,14 +94,14 @@
                         </div>
                         <div id="progressMessage" class="text-muted">
                             <i class="fas fa-info-circle"></i>
-                            Preparando el sistema para procesar tu archivo...
+                            Preparando para cargar tu archivo...
                         </div>
                     </div>
 
-                    <!-- Pasos del proceso -->
+                    <!-- Pasos del proceso - solo carga -->
                     <div class="row">
                         <div class="col-12">
-                            <h6 class="mb-3">Progreso del Proceso:</h6>
+                            <h6 class="mb-3">Progreso de Carga:</h6>
                             <div class="list-group">
                                 <div class="list-group-item d-flex align-items-center" id="step-1">
                                     <div class="step-icon me-3">
@@ -132,8 +132,8 @@
                                         <i class="fas fa-circle text-muted"></i>
                                     </div>
                                     <div>
-                                        <div class="fw-bold">3. Procesando Excel</div>
-                                        <small class="text-muted">Extrayendo y limpiando datos</small>
+                                        <div class="fw-bold">3. Cargando en memoria</div>
+                                        <small class="text-muted">Preparando datos para análisis</small>
                                     </div>
                                 </div>
                                 <div class="list-group-item d-flex align-items-center" id="step-4">
@@ -143,30 +143,8 @@
                                         <i class="fas fa-circle text-muted"></i>
                                     </div>
                                     <div>
-                                        <div class="fw-bold">4. Entrenando modelos IA</div>
-                                        <small class="text-muted">FR-30, RUL y detección de anomalías</small>
-                                    </div>
-                                </div>
-                                <div class="list-group-item d-flex align-items-center" id="step-5">
-                                    <div class="step-icon me-3">
-                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
-                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
-                                        <i class="fas fa-circle text-muted"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold">5. Analizando datos</div>
-                                        <small class="text-muted">Generando estadísticas y métricas</small>
-                                    </div>
-                                </div>
-                                <div class="list-group-item d-flex align-items-center" id="step-6">
-                                    <div class="step-icon me-3">
-                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
-                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
-                                        <i class="fas fa-circle text-muted"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold">6. Finalizando</div>
-                                        <small class="text-muted">Preparando dashboard y visualizaciones</small>
+                                        <div class="fw-bold">4. Archivo listo</div>
+                                        <small class="text-muted">Listo para seleccionar tipo de análisis</small>
                                     </div>
                                 </div>
                             </div>
@@ -563,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateProgressSteps(currentStep, totalSteps) {
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 4; i++) {  // Solo 4 pasos ahora
             const stepElement = document.getElementById(`step-${i}`);
             const icons = stepElement.querySelectorAll('.step-icon i');
             const [spinIcon, checkIcon, defaultIcon] = icons;
@@ -588,7 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function resetProgressSteps() {
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 4; i++) {  // Solo 4 pasos ahora
             const stepElement = document.getElementById(`step-${i}`);
             const icons = stepElement.querySelectorAll('.step-icon i');
             const [spinIcon, checkIcon, defaultIcon] = icons;
@@ -626,12 +604,12 @@ document.addEventListener('DOMContentLoaded', function() {
         clearInterval(progressInterval);
         
         // Completar todos los pasos
-        updateProgressSteps(7, 6);
+        updateProgressSteps(5, 4);  // 5 para completar el paso 4
         updateProgressBar(100);
         
-        document.getElementById('currentTask').textContent = 'Procesamiento completado exitosamente';
+        document.getElementById('currentTask').textContent = 'Archivo cargado exitosamente';
         document.getElementById('progressMessage').innerHTML = 
-            '<i class="fas fa-check-circle text-success"></i> Archivo procesado y modelos IA entrenados correctamente.';
+            '<i class="fas fa-check-circle text-success"></i> ' + data.message;
         
         // Mostrar botón de éxito
         document.getElementById('successSection').style.display = 'block';

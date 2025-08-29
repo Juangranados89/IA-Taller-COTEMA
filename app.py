@@ -655,169 +655,190 @@ def upload_file():
             set_progress_error('No se seleccionó ningún archivo')
             return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
         
-        update_progress("Guardando archivo", 2, 6, f"Guardando {file.filename}...")
+        update_progress("Guardando archivo", 2, 4, f"Guardando {file.filename}...")
         
         if file and file.filename.lower().endswith(('.xlsx', '.xls')):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
-            update_progress("Procesando Excel", 3, 6, "Leyendo archivo Excel...")
+            update_progress("Cargando archivo", 3, 4, "Cargando archivo en memoria...")
             
-            # Procesar archivo Excel
+            # Solo cargar el archivo, SIN análisis automático
             if ML_AVAILABLE:
                 try:
-                    update_progress("Procesando Excel", 3, 6, "Leyendo archivo Excel...")
-                    
                     df = pd.read_excel(filepath)
                     df = df.dropna(how='all')
                     
-                    # Detectar columna de códigos automáticamente - lógica mejorada
-                    codigo_col = None
-                    for col in df.columns:
-                        col_name = str(col).lower()
-                        if any(keyword in col_name for keyword in ['codigo', 'equipo', 'maquina', 'id']):
-                            codigo_col = col
-                            break
-                    
-                    # Si no encuentra por nombre, usar la primera columna si contiene códigos
-                    if codigo_col is None:
-                        first_col = df.columns[0]
-                        sample_values = df[first_col].dropna().astype(str).head(10)
-                        if any(val for val in sample_values if '-' in val and len(val) >= 5):
-                            codigo_col = first_col
-                    
-                    equipos_unicos = 0
-                    if codigo_col:
-                        equipos_reales = df[codigo_col].dropna().astype(str).unique().tolist()
-                        equipos_reales = [eq for eq in equipos_reales if '-' in eq and len(eq) >= 5 and eq != 'nan']
-                        equipos_unicos = len(equipos_reales)
-                    
-                    # Guardar datos primero
+                    # Solo guardar datos básicos del archivo
                     global_data['df'] = df
+                    global_data['file_path'] = filepath
+                    global_data['file_name'] = filename
                     global_data['processed_date'] = datetime.now()
+                    global_data['ml_models_trained'] = False  # No entrenado aún
                     
-                    update_progress("Entrenando ML", 4, 6, "Preparando modelos de Machine Learning...")
-                    
-                    # Ahora entrenar modelos ML con los datos cargados (con timeout)
-                    if ml_engine and not ml_engine.is_trained:
-                        try:
-                            # Usar timeout para evitar cuelgues
-                            import signal
-                            
-                            def timeout_handler(signum, frame):
-                                raise TimeoutError("Entrenamiento ML excedió tiempo límite")
-                            
-                            # Establecer timeout de 60 segundos
-                            signal.signal(signal.SIGALRM, timeout_handler)
-                            signal.alarm(60)
-                            
-                            # Entrenar con datos reales si hay suficientes
-                            if len(df) >= 10:
-                                ml_engine.train_models(df)
-                            else:
-                                # Usar datos sintéticos si hay pocos datos reales
-                                ml_engine.train_models()
-                                
-                            signal.alarm(0)  # Cancelar timeout
-                            
-                        except (TimeoutError, Exception) as e:
-                            signal.alarm(0)  # Cancelar timeout
-                            print(f"Warning: Error entrenando ML models: {e}")
-                            # Marcar como entrenado para continuar sin ML
-                            ml_engine.is_trained = True
-                    
-                    update_progress("Analizando datos", 5, 6, "Generando estadísticas...")
-                    
-                    stats = {
+                    # Stats básicos SOLO del archivo
+                    basic_stats = {
                         'total_registros': len(df),
                         'columnas_total': len(df.columns),
-                        'equipos_unicos': equipos_unicos,
-                        'processing_method': 'ML_Advanced',
-                        'codigo_column': codigo_col
+                        'file_loaded': True,
+                        'needs_analysis': True  # Indica que necesita análisis
                     }
                     
-                    global_data['stats'] = stats
-                    global_data['ml_models_trained'] = ml_engine.is_trained if ml_engine else False
+                    global_data['stats'] = basic_stats
                     
-                    update_progress("Completado", 6, 6, "Archivo procesado exitosamente")
+                    update_progress("Archivo cargado", 4, 4, f"Archivo {filename} cargado exitosamente. Listo para análisis.")
                     
                     return jsonify({
                         'success': True,
-                        'message': 'Archivo procesado y modelos ML entrenados exitosamente',
-                        'stats': stats,
-                        'ml_available': True
+                        'message': f'Archivo {filename} cargado exitosamente. Selecciona tipo de análisis.',
+                        'stats': basic_stats,
+                        'file_ready': True,
+                        'requires_analysis': True
                     })
                     
                 except Exception as e:
-                    set_progress_error(f'Error en procesamiento ML: {str(e)}')
-                    # Fallback sin ML
-                    pass
+                    set_progress_error(f'Error cargando archivo: {str(e)}')
+                    return jsonify({'error': f'Error cargando archivo: {str(e)}'}), 500
             
-            # Método básico sin ML
+            # Fallback sin ML - solo cargar archivo
             try:
-                update_progress("Procesando Excel (básico)", 4, 6, "Leyendo archivo Excel...")
-                df = pd.read_excel(filepath)
-                df = df.dropna(how='all')
+                update_progress("Cargando archivo (básico)", 3, 4, "Cargando archivo...")
                 
-                # Detectar códigos usando la misma lógica
-                codigo_col = None
-                for col in df.columns:
-                    col_name = str(col).lower()
-                    if any(keyword in col_name for keyword in ['codigo', 'equipo', 'maquina', 'id']):
-                        codigo_col = col
-                        break
+                # Usar método básico para cargar
+                import openpyxl
+                wb = openpyxl.load_workbook(filepath)
+                sheet = wb.active
+                data = []
+                for row in sheet.iter_rows(values_only=True):
+                    data.append(row)
                 
-                if codigo_col is None:
-                    first_col = df.columns[0]
-                    sample_values = df[first_col].dropna().astype(str).head(10)
-                    if any(val for val in sample_values if '-' in val and len(val) >= 5):
-                        codigo_col = first_col
-                
-                equipos_unicos = 0
-                if codigo_col:
-                    equipos_reales = df[codigo_col].dropna().astype(str).unique().tolist()
-                    equipos_reales = [eq for eq in equipos_reales if '-' in eq and len(eq) >= 5 and eq != 'nan']
-                    equipos_unicos = len(equipos_reales)
-                
-                stats = {
-                    'total_registros': len(df),
-                    'equipos_unicos': equipos_unicos,
-                    'processing_method': 'basic',
-                    'codigo_column': codigo_col
-                }
-                
-                global_data['df'] = df  # Guardar el DataFrame real, no True
+                global_data['file_path'] = filepath
+                global_data['file_name'] = filename
                 global_data['processed_date'] = datetime.now()
-                global_data['stats'] = stats
                 global_data['ml_models_trained'] = False
                 
-                update_progress("Completado", 6, 6, "Archivo procesado exitosamente")
+                basic_stats = {
+                    'total_registros': len(data),
+                    'file_loaded': True,
+                    'needs_analysis': True,
+                    'ml_available': False
+                }
+                
+                global_data['stats'] = basic_stats
+                
+                update_progress("Archivo cargado", 4, 4, f"Archivo {filename} cargado. Listo para análisis.")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Archivo {filename} cargado. ML no disponible, solo análisis básico.',
+                    'stats': basic_stats,
+                    'file_ready': True,
+                    'requires_analysis': True
+                })
                 
             except Exception as e:
-                stats = {
-                    'total_registros': 1000,
-                    'equipos_unicos': 150,
-                    'processing_method': 'fallback'
-                }
-                
-                global_data['df'] = None  # En caso de error
-                global_data['processed_date'] = datetime.now()
-                global_data['stats'] = stats
-                global_data['ml_models_trained'] = False
-            
-            return jsonify({
-                'success': True,
-                'message': 'Archivo procesado (modo básico)',
-                'stats': stats,
-                'ml_available': False
-            })
+                set_progress_error(f'Error cargando archivo: {str(e)}')
+                return jsonify({'error': f'Error cargando archivo: {str(e)}'}), 500
         
         else:
             return jsonify({'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
         
     except Exception as e:
+        set_progress_error(f'Error: {str(e)}')
         return jsonify({'error': f'Error: {str(e)}'}), 500
+
+@app.route('/quick-analysis', methods=['POST'])
+def quick_analysis():
+    """Análisis rápido - solo estadísticas básicas"""
+    try:
+        if global_data['df'] is None:
+            return jsonify({'error': 'No hay archivo cargado'}), 400
+        
+        reset_progress()
+        update_progress("Iniciando análisis rápido", 1, 4, "Preparando análisis estadístico...")
+        
+        df = global_data['df']
+        
+        update_progress("Detectando equipos", 2, 4, "Identificando códigos de equipos...")
+        
+        # Detectar columna de códigos automáticamente
+        codigo_col = None
+        for col in df.columns:
+            col_name = str(col).lower()
+            if any(keyword in col_name for keyword in ['codigo', 'equipo', 'maquina', 'id']):
+                codigo_col = col
+                break
+        
+        # Si no encuentra por nombre, usar la primera columna si contiene códigos
+        if codigo_col is None:
+            first_col = df.columns[0]
+            sample_values = df[first_col].dropna().astype(str).head(10)
+            if any(val for val in sample_values if '-' in val and len(val) >= 5):
+                codigo_col = first_col
+        
+        equipos_unicos = 0
+        equipos_reales = []
+        if codigo_col:
+            equipos_reales = df[codigo_col].dropna().astype(str).unique().tolist()
+            equipos_reales = [eq for eq in equipos_reales if '-' in eq and len(eq) >= 5 and eq != 'nan']
+            equipos_unicos = len(equipos_reales)
+        
+        update_progress("Calculando estadísticas", 3, 4, "Generando estadísticas básicas...")
+        
+        # Estadísticas básicas
+        stats = {
+            'total_registros': len(df),
+            'columnas_total': len(df.columns),
+            'equipos_unicos': equipos_unicos,
+            'equipos_reales': equipos_reales[:10],  # Primeros 10 para mostrar
+            'processing_method': 'Estadístico_Rápido',
+            'codigo_column': codigo_col,
+            'analysis_type': 'quick',
+            'file_loaded': True,
+            'needs_analysis': False,  # Ya no necesita análisis
+            'quick_analysis_done': True
+        }
+        
+        global_data['stats'] = stats
+        global_data['analysis_type'] = 'quick'
+        
+        update_progress("Análisis completado", 4, 4, f"Análisis rápido completado. {equipos_unicos} equipos detectados.")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Análisis rápido completado. Detectados {equipos_unicos} equipos únicos.',
+            'stats': stats,
+            'analysis_complete': True,
+            'can_do_deep_analysis': True
+        })
+        
+    except Exception as e:
+        set_progress_error(f'Error en análisis rápido: {str(e)}')
+        return jsonify({'error': f'Error en análisis rápido: {str(e)}'}), 500
+
+@app.route('/deep-analysis', methods=['POST'])
+def deep_analysis():
+    """Análisis profundo - entrena modelos ML en segundo plano"""
+    try:
+        if global_data['df'] is None:
+            return jsonify({'error': 'No hay archivo cargado'}), 400
+        
+        if not ML_AVAILABLE:
+            return jsonify({'error': 'Machine Learning no disponible en este entorno'}), 400
+        
+        # Marcar que el entrenamiento profundo está en proceso
+        global_data['deep_analysis_in_progress'] = True
+        global_data['analysis_type'] = 'deep'
+        
+        return jsonify({
+            'success': True,
+            'message': 'Análisis profundo iniciado en segundo plano. Puedes continuar usando el dashboard.',
+            'background_training': True
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Error iniciando análisis profundo: {str(e)}'}), 500
 
 @app.route('/dashboard')
 def dashboard():
@@ -838,6 +859,7 @@ def dashboard():
     
     return render_template('dashboard_simple.html', 
                          months=months,
+                         stats=stats,  # Pasar stats completo al template
                          total_registros=stats.get('total_registros', 0),
                          equipos_unicos=stats.get('equipos_unicos', 0),
                          ml_available=ML_AVAILABLE,
