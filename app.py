@@ -734,11 +734,11 @@ def upload_file():
                         'columnas_total': len(df.columns),
                         'equipos_unicos': equipos_unicos,
                         'processing_method': 'ML_Advanced',
-                        'ml_models_trained': ml_engine.is_trained if ml_engine else False,
                         'codigo_column': codigo_col
                     }
                     
                     global_data['stats'] = stats
+                    global_data['ml_models_trained'] = ml_engine.is_trained if ml_engine else False
                     
                     update_progress("Completado", 6, 6, "Archivo procesado exitosamente")
                     
@@ -784,13 +784,13 @@ def upload_file():
                     'total_registros': len(df),
                     'equipos_unicos': equipos_unicos,
                     'processing_method': 'basic',
-                    'ml_models_trained': False,
                     'codigo_column': codigo_col
                 }
                 
                 global_data['df'] = df  # Guardar el DataFrame real, no True
                 global_data['processed_date'] = datetime.now()
                 global_data['stats'] = stats
+                global_data['ml_models_trained'] = False
                 
                 update_progress("Completado", 6, 6, "Archivo procesado exitosamente")
                 
@@ -798,13 +798,13 @@ def upload_file():
                 stats = {
                     'total_registros': 1000,
                     'equipos_unicos': 150,
-                    'processing_method': 'fallback',
-                    'ml_models_trained': False
+                    'processing_method': 'fallback'
                 }
                 
                 global_data['df'] = None  # En caso de error
                 global_data['processed_date'] = datetime.now()
                 global_data['stats'] = stats
+                global_data['ml_models_trained'] = False
             
             return jsonify({
                 'success': True,
@@ -841,7 +841,7 @@ def dashboard():
                          total_registros=stats.get('total_registros', 0),
                          equipos_unicos=stats.get('equipos_unicos', 0),
                          ml_available=ML_AVAILABLE,
-                         ml_models_trained=stats.get('ml_models_trained', False))
+                         ml_models_trained=global_data.get('ml_models_trained', False))
 
 @app.route('/kpis/<mes>')
 def calculate_kpis(mes):
@@ -1229,8 +1229,8 @@ def train_models():
             update_progress("Validando modelos", 4, 5, "Verificando precisión...")
             
             # Actualizar el estado global
+            global_data['ml_models_trained'] = True
             if global_data.get('stats'):
-                global_data['stats']['ml_models_trained'] = True
                 global_data['stats']['processing_method'] = 'ML_Advanced'
             
             update_progress("Completado", 5, 5, "Modelos entrenados exitosamente")
