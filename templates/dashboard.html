@@ -326,20 +326,29 @@ function calculateKPIs() {
     
     // Make API call
     fetch(`/kpis/${selectedMonth}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error de red: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.success) {
+            // Robust validation of the response
+            if (data && data.success && data.kpis) {
                 currentKPIsData = data.kpis;
                 displayKPIResults(data);
                 updateKPISummary(data);
-                kpiStatus.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> KPIs calculados exitosamente</div>';
+                kpiStatus.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> KPIs calculados exitosamente.</div>';
             } else {
-                kpiStatus.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error: ${data.error}</div>`;
+                const errorMessage = data.error || 'La respuesta del servidor no tiene el formato esperado o no contiene KPIs.';
+                kpiStatus.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error: ${errorMessage}</div>`;
+                document.getElementById('kpiResults').innerHTML = `<div class="text-center text-muted p-5"><i class="fas fa-exclamation-triangle fa-3x text-danger"></i><h4>Error al Cargar KPIs</h4><p>${errorMessage}</p></div>`;
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            kpiStatus.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error calculando KPIs</div>';
+            console.error('Error fetching KPIs:', error);
+            kpiStatus.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error de conexión: ${error.message}</div>`;
+            document.getElementById('kpiResults').innerHTML = `<div class="text-center text-muted p-5"><i class="fas fa-exclamation-triangle fa-3x text-danger"></i><h4>Error de Conexión</h4><p>No se pudo comunicar con el servidor. Verifique su conexión y vuelva a intentarlo.</p></div>`;
         })
         .finally(() => {
             calculateBtn.innerHTML = originalText;
@@ -404,20 +413,28 @@ function displayKPIResults(data) {
 }
 
 function generateKPICharts(kpis) {
+    // Ensure kpis object and its properties exist
+    const safeKpis = {
+        fr30: kpis.fr30 || {},
+        rul: kpis.rul || {},
+        forecast: kpis.forecast || {},
+        anomaly: kpis.anomaly || {}
+    };
+
     // FR-30 Chart
-    generateFR30Chart(kpis.fr30);
+    generateFR30Chart(safeKpis.fr30);
     
     // RUL Chart
-    generateRULChart(kpis.rul);
+    generateRULChart(safeKpis.rul);
     
     // Forecast Chart
-    generateForecastChart(kpis.forecast);
+    generateForecastChart(safeKpis.forecast);
     
     // Anomaly Scatter
-    generateAnomalyScatter(kpis);
+    generateAnomalyScatter(safeKpis);
     
     // Equipment Summary Table
-    generateEquipmentSummary(kpis);
+    generateEquipmentSummary(safeKpis);
 }
 
 function generateFR30Chart(fr30Data) {
