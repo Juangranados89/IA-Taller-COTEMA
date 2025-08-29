@@ -1,67 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Análisis - COTEMA Analytics{% endblock %}
+{% block title %}Dashboard Simple - COTEMA Analytics{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid mt-4">
+    <!-- Encabezado del Dashboard -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="d-flex jus    // Validar que los datos existen antes de procesarlos
-    if (!data || !data.kpis) {
-        console.error('Datos de KPIs no disponibles');
-        document.getElementById('kpisContent').innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle"></i>
-                No hay datos de KPIs disponibles. Por favor, carga un archivo Excel primero.
-            </div>
-        `;
-        return;
-    }
-
-    // Asegurar que todas las propiedades existan después de validar que data.kpis existe
-    if (!data.kpis.fr30) data.kpis.fr30 = {};
-    if (!data.kpis.rul) data.kpis.rul = {};
-    if (!data.kpis.forecast) data.kpis.forecast = {};
-    if (!data.kpis.anomaly) data.kpis.anomaly = {};
-
-    let html = `
-        <div class="row">
-            <div class="col-md-3">
-                <div class="card border-danger">
-                    <div class="card-header bg-danger text-white">
-                        <h6 class="mb-0">⚠️ FR-30 (Riesgo 30 días)</h6>
-                    </div>
-                    <div class="card-body p-2">
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr><th>Equipo</th><th>Riesgo</th><th>Estado</th></tr>
-                                </thead>
-                                <tbody>
-    `;
-    
-    // Validación robusta antes de acceder a propiedades
-    if (data && data.kpis && data.kpis.fr30) {
-        const fr30Keys = Object.keys(data.kpis.fr30);
-        if (fr30Keys && fr30Keys.length > 0) {
-            fr30Keys.slice(0, 8).forEach(equipo => {
-                const fr30 = data.kpis.fr30[equipo];
-                if (fr30) {
-                    html += `<tr><td><small>${equipo}</small></td><td><small>${fr30.risk_percentage}</small></td><td><span class="badge bg-${fr30.badge_color} badge-sm">${fr30.status}</span></td></tr>`;
-                }
-            });
-        } else {
-            html += `<tr><td colspan="3" class="text-center text-muted">No hay datos FR-30 disponibles</td></tr>`;
-        }
-    } else {
-        html += `<tr><td colspan="3" class="text-center text-muted">Cargando datos FR-30...</td></tr>`;
-    }
-    } else {
-        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
-    } align-items-center">
+            <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h2 class="mb-0">📊 Dashboard de Análisis</h2>
-                    <p class="text-muted">Análisis de KPIs con Inteligencia Artificial</p>
+                    <h2 class="mb-0">📊 Dashboard de Análisis Simplificado</h2>
+                    <p class="text-muted">Análisis rápido de KPIs con Inteligencia Artificial</p>
                 </div>
                 <div class="text-end">
                     <span class="badge bg-success fs-6">
@@ -72,78 +21,12 @@
         </div>
     </div>
 
-    <!-- Estadísticas principales -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card text-white bg-info">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="card-title">Total Registros</h6>
-                            <h2 class="mb-0">{{ total_registros }}</h2>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-database fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white bg-success">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="card-title">Equipos Únicos</h6>
-                            <h2 class="mb-0">{{ equipos_unicos }}</h2>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-cogs fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white {% if ml_available %}bg-primary{% else %}bg-warning{% endif %}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="card-title">Machine Learning</h6>
-                            <h4 class="mb-0">{% if ml_available %}🤖 ACTIVO{% else %}⚠️ BÁSICO{% endif %}</h4>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-{% if ml_available %}robot{% else %}exclamation-triangle{% endif %} fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-white {% if models_trained %}bg-success{% else %}bg-secondary{% endif %}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="card-title">Modelos IA</h6>
-                            <h4 class="mb-0">{% if models_trained %}✅ LISTOS{% else %}⏳ BÁSICO{% endif %}</h4>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-{% if models_trained %}check-circle{% else %}hourglass-half{% endif %} fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Panel de Análisis -->
+    <!-- Panel de Control -->
     <div class="row mb-4">
         <div class="col-md-6">
-            <div class="card border-primary">
+            <div class="card border-primary h-100">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-calendar-alt"></i> Selección de Período
-                    </h5>
+                    <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Selección de Período</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
@@ -155,58 +38,22 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle"></i> 
-                            Datos disponibles desde 2022 hasta 2025. Los modelos de IA se ajustan automáticamente por período histórico.
-                        </small>
-                    </div>
                     <button onclick="analizarMes()" class="btn btn-primary">
                         <i class="fas fa-chart-line"></i> Analizar KPIs
                     </button>
-                    <a href="{{ url_for('predictions_dashboard') }}" class="btn btn-outline-success ms-2">
-                        <i class="fas fa-robot"></i> Predicciones ML
-                    </a>
                 </div>
             </div>
         </div>
         
         <div class="col-md-6">
-            <div class="card border-info">
+            <div class="card border-info h-100">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-brain"></i> Estado del Sistema IA
-                    </h5>
+                    <h5 class="mb-0"><i class="fas fa-brain"></i> Estado del Sistema IA</h5>
                 </div>
-                <div class="card-body">
-                    <div id="estadoAnalisis">
-                        <div class="row text-center">
-                            <div class="col-6">
-                                <div class="mb-2">
-                                    {% if ml_available %}
-                                        <i class="fas fa-microchip text-success fa-2x"></i>
-                                        <p class="mb-0 mt-1"><small>ML Disponible</small></p>
-                                    {% else %}
-                                        <i class="fas fa-exclamation-triangle text-warning fa-2x"></i>
-                                        <p class="mb-0 mt-1"><small>Modo Estadístico</small></p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="mb-2">
-                                    {% if models_trained %}
-                                        <i class="fas fa-check-circle text-success fa-2x"></i>
-                                        <p class="mb-0 mt-1"><small>Modelos Entrenados</small></p>
-                                    {% else %}
-                                        <i class="fas fa-hourglass-half text-secondary fa-2x"></i>
-                                        <p class="mb-0 mt-1"><small>Modo Simulado</small></p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        <hr>
-                        <p class="text-muted text-center mb-0">
-                            <small>Selecciona un mes para comenzar el análisis</small>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <div id="estadoAnalisis" class="text-center">
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-info-circle"></i> Selecciona un mes para comenzar el análisis.
                         </p>
                     </div>
                 </div>
@@ -214,279 +61,204 @@
         </div>
     </div>
 
-    <!-- Resultados del Análisis -->
+    <!-- Contenedor de Resultados del Análisis -->
     <div class="row" id="resultados" style="display: none;">
         <div class="col-12">
             <div class="card border-success">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-chart-bar"></i> Resultados del Análisis IA
-                    </h5>
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Resultados del Análisis IA</h5>
                 </div>
                 <div class="card-body">
                     <div id="contenidoResultados">
-                        <!-- Los resultados se cargarán aquí -->
+                        <!-- Los resultados se cargarán aquí dinámicamente -->
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 function analizarMes() {
     const mes = document.getElementById('mesSelector').value;
     if (!mes) {
-        alert('Por favor selecciona un mes');
+        alert('Por favor, selecciona un mes para el análisis.');
         return;
     }
 
-    document.getElementById('estadoAnalisis').innerHTML = `
+    // Mostrar estado de carga
+    const estadoAnalisis = document.getElementById('estadoAnalisis');
+    estadoAnalisis.innerHTML = `
         <div class="text-center">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Analizando...</span>
             </div>
-            <p class="mt-2">Ejecutando modelos de IA...</p>
+            <p class="mt-2 mb-0">Ejecutando modelos de IA para <strong>${mes}</strong>...</p>
         </div>
     `;
+
+    // Ocultar resultados anteriores y mostrar el panel
+    document.getElementById('resultados').style.display = 'none';
     
     fetch(`/kpis/${mes}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error de red: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
             mostrarResultados(data);
         })
         .catch(error => {
-            document.getElementById('estadoAnalisis').innerHTML = `
-                <div class="alert alert-danger" role="alert">
+            console.error('Error en el análisis:', error);
+            estadoAnalisis.innerHTML = `
+                <div class="alert alert-danger mb-0" role="alert">
                     <i class="fas fa-exclamation-triangle"></i>
-                    Error en el análisis: ${error.message}
+                    <strong>Error en el análisis:</strong> ${error.message}
                 </div>
             `;
         });
 }
 
 function mostrarResultados(data) {
+    const estadoAnalisis = document.getElementById('estadoAnalisis');
+    const contenidoResultados = document.getElementById('contenidoResultados');
+    const resultadosContainer = document.getElementById('resultados');
+
+    // Validación robusta de la respuesta
     if (!data || !data.kpis) {
-        document.getElementById('kpiContainer').innerHTML = `
-            <div class="alert alert-warning text-center">
-                No hay datos de KPIs disponibles. Por favor, carga un archivo Excel primero.
+        estadoAnalisis.innerHTML = `
+            <div class="alert alert-danger mb-0" role="alert">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Error:</strong> No se recibieron datos de KPIs válidos del servidor.
             </div>
         `;
+        contenidoResultados.innerHTML = '';
+        resultadosContainer.style.display = 'none';
         return;
     }
 
-    // Asegurar que todas las propiedades existan después de validar que data.kpis existe
-    if (!data.kpis.fr30) data.kpis.fr30 = {};
-    if (!data.kpis.rul) data.kpis.rul = {};
-    if (!data.kpis.forecast) data.kpis.forecast = {};
-    if (!data.kpis.anomaly) data.kpis.anomaly = {};
-
-    document.getElementById('estadoAnalisis').innerHTML = `
+    // Mensaje de éxito en el panel de estado
+    estadoAnalisis.innerHTML = `
         <div class="alert alert-success mb-0" role="alert">
             <i class="fas fa-check-circle"></i>
-            <strong>Análisis completado exitosamente</strong><br>
-            <small>Procesado con: ${data.processing_method || 'IA Avanzado'}</small>
+            <strong>Análisis completado para ${data.mes}</strong>
         </div>
     `;
     
+    // Inicialización segura de los objetos de KPI
+    const kpis = {
+        fr30: data.kpis.fr30 || {},
+        rul: data.kpis.rul || {},
+        forecast: data.kpis.forecast || {},
+        anomaly: data.kpis.anomaly || {}
+    };
+
+    // Construir el HTML para los resultados
     let html = `
-        <div class="row mb-4">
+        <div class="row mb-3">
             <div class="col-md-6">
                 <h6><i class="fas fa-calendar"></i> Período Analizado: <strong>${data.mes}</strong></h6>
-                <p><i class="fas fa-cogs"></i> Total equipos: <strong>${data.total_equipos}</strong></p>
+                <p class="mb-0"><i class="fas fa-cogs"></i> Total equipos analizados: <strong>${data.total_equipos}</strong></p>
             </div>
             <div class="col-md-6 text-end">
                 <small class="text-muted">
                     <i class="fas fa-clock"></i> Procesado: ${new Date(data.timestamp).toLocaleString()}<br>
-                    <i class="fas fa-robot"></i> ML Status: ${data.ml_models_active ? 'Activo' : 'Simulado'}
+                    <i class="fas fa-robot"></i> Método: ${data.ml_models_active ? 'ML Activo' : 'Estadístico'}
                 </small>
             </div>
         </div>
-        
         <div class="row">
-            <div class="col-md-3">
-                <div class="card border-danger">
-                    <div class="card-header bg-danger text-white">
-                        <h6 class="mb-0">🚨 FR-30 (Riesgo 30 días)</h6>
-                    </div>
-                    <div class="card-body p-2">
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr><th>Equipo</th><th>Riesgo</th><th>Banda</th></tr>
-                                </thead>
-                                <tbody>
     `;
-    
-    const fr30Keys = Object.keys(data.kpis.fr30 || {});
+
+    // --- Tarjeta FR-30 ---
+    html += `
+        <div class="col-md-3 mb-4">
+            <div class="card h-100 border-danger">
+                <div class="card-header bg-danger text-white"><h6 class="mb-0">🚨 FR-30 (Riesgo)</h6></div>
+                <div class="card-body p-2"><div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr><th>Equipo</th><th>Riesgo</th><th>Estado</th></tr></thead>
+                        <tbody>`;
+    const fr30Keys = Object.keys(kpis.fr30);
     if (fr30Keys.length > 0) {
         fr30Keys.slice(0, 8).forEach(equipo => {
-            const fr30 = data.kpis.fr30[equipo];
-            if (fr30) {
-                html += `<tr><td><small>${equipo}</small></td><td><small>${(fr30.risk_30d * 100).toFixed(1)}%</small></td><td><span class="badge bg-${fr30.banda_color} badge-sm">${fr30.banda}</span></td></tr>`;
-            }
+            const fr30 = kpis.fr30[equipo];
+            html += `<tr><td><small>${equipo}</small></td><td><small>${fr30.risk_percentage || 'N/A'}</small></td><td><span class="badge bg-${fr30.badge_color || 'secondary'}">${fr30.status || 'N/A'}</span></td></tr>`;
         });
     } else {
-        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos</small></td></tr>`;
     }
-    
+    html += `</tbody></table></div></div></div></div>`;
+
+    // --- Tarjeta RUL ---
     html += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="card border-warning">
-                    <div class="card-header bg-warning text-dark">
-                        <h6 class="mb-0">⏳ RUL (Vida Útil Restante)</h6>
-                    </div>
-                    <div class="card-body p-2">
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr><th>Equipo</th><th>RUL50</th><th>RUL90</th></tr>
-                                </thead>
-                                <tbody>
-    `;
-    
-    const rulKeys = Object.keys(data.kpis.rul || {});
+        <div class="col-md-3 mb-4">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning text-dark"><h6 class="mb-0">⏳ RUL (Días)</h6></div>
+                <div class="card-body p-2"><div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr><th>Equipo</th><th>RUL-50</th><th>RUL-90</th></tr></thead>
+                        <tbody>`;
+    const rulKeys = Object.keys(kpis.rul);
     if (rulKeys.length > 0) {
         rulKeys.slice(0, 8).forEach(equipo => {
-            const rul = data.kpis.rul[equipo];
-            if (rul) {
-                html += `<tr><td><small>${equipo}</small></td><td><small>${rul.rul50_d}d</small></td><td><small>${rul.rul90_d}d</small></td></tr>`;
-            }
+            const rul = kpis.rul[equipo];
+            html += `<tr><td><small>${equipo}</small></td><td><small>${rul.rul50_d || 'N/A'}d</small></td><td><small>${rul.rul90_d || 'N/A'}d</small></td></tr>`;
         });
     } else {
-        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos</small></td></tr>`;
     }
-    
+    html += `</tbody></table></div></div></div></div>`;
+
+    // --- Tarjeta Forecast ---
     html += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="card border-info">
-                    <div class="card-header bg-info text-white">
-                        <h6 class="mb-0">📊 Forecast (Pronósticos)</h6>
-                    </div>
-                    <div class="card-body p-2">
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr><th>Equipo</th><th>7d</th><th>30d</th></tr>
-                                </thead>
-                                <tbody>
-    `;
-    
-    const forecastKeys = Object.keys(data.kpis.forecast || {});
+        <div class="col-md-3 mb-4">
+            <div class="card h-100 border-info">
+                <div class="card-header bg-info text-white"><h6 class="mb-0">📊 Forecast (Uso)</h6></div>
+                <div class="card-body p-2"><div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr><th>Equipo</th><th>7d</th><th>30d</th></tr></thead>
+                        <tbody>`;
+    const forecastKeys = Object.keys(kpis.forecast);
     if (forecastKeys.length > 0) {
         forecastKeys.slice(0, 8).forEach(equipo => {
-            const forecast = data.kpis.forecast[equipo];
-            if (forecast) {
-                html += `<tr><td><small>${equipo}</small></td><td><small>${forecast.forecast_7d}</small></td><td><small>${forecast.forecast_30d}</small></td></tr>`;
-            }
+            const forecast = kpis.forecast[equipo];
+            html += `<tr><td><small>${equipo}</small></td><td><small>${forecast.forecast_7d || 'N/A'}</small></td><td><small>${forecast.forecast_30d || 'N/A'}</small></td></tr>`;
         });
     } else {
-        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos</small></td></tr>`;
     }
-    
+    html += `</tbody></table></div></div></div></div>`;
+
+    // --- Tarjeta Anomaly ---
     html += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="card border-secondary">
-                    <div class="card-header bg-secondary text-white">
-                        <h6 class="mb-0">🔍 Anomalías (Detección IA)</h6>
-                    </div>
-                    <div class="card-body p-2">
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr><th>Equipo</th><th>Score</th><th>Estado</th></tr>
-                                </thead>
-                                <tbody>
-    `;
-    
-    const anomalyKeys = Object.keys(data.kpis.anomaly || {});
+        <div class="col-md-3 mb-4">
+            <div class="card h-100 border-secondary">
+                <div class="card-header bg-secondary text-white"><h6 class="mb-0">🔍 Anomalías</h6></div>
+                <div class="card-body p-2"><div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr><th>Equipo</th><th>Score</th><th>Estado</th></tr></thead>
+                        <tbody>`;
+    const anomalyKeys = Object.keys(kpis.anomaly);
     if (anomalyKeys.length > 0) {
         anomalyKeys.slice(0, 8).forEach(equipo => {
-            const anomaly = data.kpis.anomaly[equipo];
-            if (anomaly) {
-                html += `<tr><td><small>${equipo}</small></td><td><small>${(anomaly.anomaly_score * 100).toFixed(0)}%</small></td><td><span class="badge bg-${anomaly.badge_color} badge-sm">${anomaly.status}</span></td></tr>`;
-            }
+            const anomaly = kpis.anomaly[equipo];
+            html += `<tr><td><small>${equipo}</small></td><td><small>${(anomaly.anomaly_score * 100).toFixed(0)}%</small></td><td><span class="badge bg-${anomaly.badge_color || 'secondary'}">${anomaly.status || 'N/A'}</span></td></tr>`;
         });
     } else {
-        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos disponibles</small></td></tr>`;
+        html += `<tr><td colspan="3" class="text-center text-muted"><small>No hay datos</small></td></tr>`;
     }
-    
-    html += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="mt-4">
-            <div class="card border-primary">
-                <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0">🤖 Información de Modelos IA Utilizados</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <strong>Método de procesamiento:</strong> ${data.processing_method || 'IA Avanzado'}<br>
-                            <strong>Algoritmos implementados:</strong><br>
-                            <ul class="mt-2 mb-2">
-                                <li><strong>FR-30 Risk Model:</strong> RandomForest para predecir probabilidad de falla en 30 días</li>
-                                <li><strong>RUL:</strong> Regresión ML para estimar vida útil restante</li>
-                                <li><strong>Forecast Model:</strong> Predicción temporal con Machine Learning</li>
-                                <li><strong>Anomaly Detection:</strong> Isolation Forest para detectar patrones anómalos</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Estado de Modelos:</strong><br>
-                            ${data.ml_models_active ? 
-                                '<span class="badge bg-success">🤖 ML Activo</span>' : 
-                                '<span class="badge bg-warning">📊 Modo Estadístico</span>'
-                            }<br><br>
-                            <strong>Precisión estimada:</strong><br>
-                            <small>FR-30: 92%, RUL: 87%, Forecast: 89%, Anomaly: 94%</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="mt-3 text-center">
-            <a href="/api/export/json" class="btn btn-outline-primary">
-                <i class="fas fa-download"></i> Exportar JSON
-            </a>
-            <a href="/api/export/csv" class="btn btn-outline-success ms-2">
-                <i class="fas fa-file-csv"></i> Exportar CSV
-            </a>
-            <a href="{{ url_for('predictions_dashboard') }}" class="btn btn-primary ms-2">
-                <i class="fas fa-chart-line"></i> Ver Tendencias Predictivas
-            </a>
-        </div>
-    `;
-    
-    document.getElementById('contenidoResultados').innerHTML = html;
-    document.getElementById('resultados').style.display = 'block';
+    html += `</tbody></table></div></div></div></div>`;
+
+    html += `</div>`; // Cierre de la fila de tarjetas
+
+    // Inyectar el HTML y mostrar el contenedor de resultados
+    contenidoResultados.innerHTML = html;
+    resultadosContainer.style.display = 'block';
 }
 </script>
 {% endblock %}
