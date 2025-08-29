@@ -9,22 +9,30 @@ import math
 import logging
 
 # Importaciones condicionales de ML - con manejo robusto de errores
-ML_AVAILABLE = False
 try:
     import pandas as pd
-    import numpy as np
-    from sklearn.ensemble import IsolationForest, RandomForestRegressor
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.linear_model import LinearRegression
-    import plotly.graph_objects as go
-    from plotly.utils import PlotlyJSONEncoder
-    ML_AVAILABLE = True
-    print("✅ ML libraries loaded successfully")
-except ImportError as e:
-    print(f"⚠️ ML libraries not available: {e}")
-    ML_AVAILABLE = False
-except Exception as e:
-    print(f"❌ Error loading ML libraries: {e}")
+except ImportError:
+    pd = None
+    print("❌ CRITICAL ERROR: Pandas library not found. The application cannot process files.")
+
+ML_AVAILABLE = False
+if pd:
+    try:
+        import numpy as np
+        from sklearn.ensemble import IsolationForest, RandomForestRegressor
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.linear_model import LinearRegression
+        import plotly.graph_objects as go
+        from plotly.utils import PlotlyJSONEncoder
+        ML_AVAILABLE = True
+        print("✅ ML libraries loaded successfully")
+    except ImportError as e:
+        print(f"⚠️ ML libraries not available: {e}")
+        ML_AVAILABLE = False
+    except Exception as e:
+        print(f"❌ Error loading ML libraries: {e}")
+        ML_AVAILABLE = False
+else:
     ML_AVAILABLE = False
 
 # Configuración de logging
@@ -670,8 +678,12 @@ def upload_file():
             
             # Solo cargar el archivo, SIN análisis automático
             try:
+                if not pd:
+                    raise ImportError("La librería pandas no está instalada en el servidor.")
+
                 print(f"📁 Cargando archivo con pandas: {filepath}")
-                df = pd.read_excel(filepath)
+                # Especificar la hoja, filas a saltar y columnas a usar
+                df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y')
                 df = df.dropna(how='all')
                 print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
                 
