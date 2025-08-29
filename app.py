@@ -669,44 +669,43 @@ def upload_file():
             update_progress("Cargando archivo", 3, 4, "Cargando archivo en memoria...")
             
             # Solo cargar el archivo, SIN análisis automático
-            if ML_AVAILABLE:
-                try:
-                    print(f"📁 Cargando archivo con pandas: {filepath}")
-                    df = pd.read_excel(filepath)
-                    df = df.dropna(how='all')
-                    print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
-                    
-                    # Solo guardar datos básicos del archivo
-                    global_data['df'] = df
-                    global_data['file_path'] = filepath
-                    global_data['file_name'] = filename
-                    global_data['processed_date'] = datetime.now()
-                    global_data['ml_models_trained'] = False  # No entrenado aún
-                    
-                    # Stats básicos SOLO del archivo
-                    basic_stats = {
-                        'total_registros': len(df),
-                        'columnas_total': len(df.columns),
-                        'file_loaded': True,
-                        'needs_analysis': True  # Indica que necesita análisis
-                    }
-                    
-                    global_data['stats'] = basic_stats
-                    
-                    update_progress("Archivo cargado", 4, 4, f"Archivo {filename} cargado exitosamente. Listo para análisis.")
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': f'Archivo {filename} cargado exitosamente. Selecciona tipo de análisis.',
-                        'stats': basic_stats,
-                        'file_ready': True,
-                        'requires_analysis': True
-                    })
-                    
-                except Exception as e:
-                    print(f"❌ Error cargando con pandas: {str(e)}")
-                    set_progress_error(f'Error al leer el archivo Excel: {str(e)}')
-                    return jsonify({'error': f'Error al leer el archivo Excel: {str(e)}'}), 500
+            try:
+                print(f"📁 Cargando archivo con pandas: {filepath}")
+                df = pd.read_excel(filepath)
+                df = df.dropna(how='all')
+                print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
+                
+                # Solo guardar datos básicos del archivo
+                global_data['df'] = df
+                global_data['file_path'] = filepath
+                global_data['file_name'] = filename
+                global_data['processed_date'] = datetime.now()
+                global_data['ml_models_trained'] = False  # No entrenado aún
+                
+                # Stats básicos SOLO del archivo
+                basic_stats = {
+                    'total_registros': len(df),
+                    'columnas_total': len(df.columns),
+                    'file_loaded': True,
+                    'needs_analysis': True  # Indica que necesita análisis
+                }
+                
+                global_data['stats'] = basic_stats
+                
+                update_progress("Archivo cargado", 4, 4, f"Archivo {filename} cargado exitosamente. Listo para análisis.")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Archivo {filename} cargado exitosamente. Selecciona tipo de análisis.',
+                    'stats': basic_stats,
+                    'file_ready': True,
+                    'requires_analysis': True
+                })
+                
+            except Exception as e:
+                print(f"❌ Error cargando con pandas: {str(e)}")
+                set_progress_error(f'Error al leer el archivo Excel: {str(e)}')
+                return jsonify({'error': f'Error al leer el archivo Excel: {str(e)}'}), 500
         
         else:
             set_progress_error('Formato no soportado. Use .xlsx o .xls')
