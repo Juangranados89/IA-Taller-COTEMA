@@ -88,6 +88,31 @@ def set_progress_error(error_message):
         'progress': 0
     })
 
+def sanitize_column_names(df):
+    """Standardizes DataFrame column names to be Python-friendly."""
+    sanitized_columns = []
+    for col in df.columns:
+        # Convert to string and then to lowercase
+        new_col = str(col).lower()
+        # Replace spaces and hyphens with underscores
+        new_col = new_col.replace(' ', '_').replace('-', '_')
+        # Keep only alphanumeric characters and underscores
+        new_col = ''.join(e for e in new_col if e.isalnum() or e == '_')
+        # Remove leading/trailing underscores
+        new_col = new_col.strip('_')
+        # Ensure the column name is not empty after sanitization
+        if not new_col:
+            new_col = 'unnamed_col'
+        # Handle potential duplicate names
+        if new_col in sanitized_columns:
+            i = 1
+            while f"{new_col}_{i}" in sanitized_columns:
+                i += 1
+            new_col = f"{new_col}_{i}"
+        sanitized_columns.append(new_col)
+    df.columns = sanitized_columns
+    return df
+
 def reset_progress():
     """Reinicia el estado de progreso"""
     global progress_state
@@ -712,6 +737,11 @@ def upload_file():
                             print(f"❌ {final_error}")
                             set_progress_error(final_error)
                             return jsonify({'error': final_error}), 500
+                
+                # ESTANDARIZAR NOMBRES DE COLUMNAS
+                if df is not None:
+                    df = sanitize_column_names(df)
+                    print(f"✅ Columnas estandarizadas: {list(df.columns)}")
                 
                 df = df.dropna(how='all')
                 print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
