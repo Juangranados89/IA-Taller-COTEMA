@@ -44,6 +44,7 @@ global_data = {
     'df': None,
     'file_path': None,
     'file_name': None,
+    'processed_date': None,
     'ml_models_trained': False
 }
 
@@ -637,7 +638,7 @@ ml_engine = COTEMAMLEngine()
 def index():
     return render_template('index.html', 
                          data_loaded=global_data['df'] is not None,
-                         processed_date=global_data['processed_date'],
+                         processed_date=global_data.get('processed_date'),
                          ml_available=ML_AVAILABLE)
 
 @app.route('/upload', methods=['POST'])
