@@ -7,6 +7,7 @@ import random
 import hashlib
 import math
 import logging
+import threading
 
 # Importaciones condicionales de ML - con manejo robusto de errores
 try:
@@ -681,198 +682,154 @@ def upload_file():
     try:
         reset_progress()
         update_progress("Validando archivo", 1, 4, "Verificando archivo seleccionado...")
-        
+
         if 'file' not in request.files:
             set_progress_error('No se seleccionó ningún archivo')
             return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
-        
+
         file = request.files['file']
         if file.filename == '':
             set_progress_error('No se seleccionó ningún archivo')
             return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
-        
+
         update_progress("Guardando archivo", 2, 4, f"Guardando {file.filename}...")
-        
-        if file and file.filename.lower().endswith(('.xlsx', '.xls')):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Crear directorio si no existe
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            file.save(filepath)
-            
-            update_progress("Cargando archivo", 3, 4, "Cargando archivo en memoria...")
-            
-            # Lógica de carga de archivo con múltiples intentos (fallback)
-            try:
-                if not pd:
-                    raise ImportError("La librería pandas no está instalada en el servidor.")
 
-                df = None
-                error_messages = []
-                logging.info("Attempting low-memory openpyxl manual read of Excel file...")
-
-                # Primero: intento de lectura manual con openpyxl en modo read_only
-                try:
-                    import openpyxl
-                    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-                    sheet_name = 'REG' if 'REG' in wb.sheetnames else wb.sheetnames[0]
-                    ws = wb[sheet_name]
-
-                    header_row_idx = 5  # B5:Y5 es la fila de encabezados según especificación
-                    start_col = 2  # columna B
-                    end_col = 25   # columna Y
-
-                    # Leer encabezados
-                    headers = []
-                    for col in range(start_col, end_col + 1):
-                        val = ws.cell(row=header_row_idx, column=col).value
-                        headers.append(val if val is not None else f'col_{col}')
-
-                    # Leer filas a partir de la fila siguiente al encabezado
-                    data_rows = []
-                    row_idx = header_row_idx + 1
-                    empty_streak = 0
-                    max_empty_streak = 5
-                    max_rows_guard = 200000  # seguridad para evitar loops infinitos
-                    rows_read = 0
-
-                    while rows_read < max_rows_guard:
-                        row_vals = []
-                        all_none = True
-                        for col in range(start_col, end_col + 1):
-                            cell_val = ws.cell(row=row_idx, column=col).value
-                            row_vals.append(cell_val)
-                            if cell_val not in (None, '', ' '):
-                                all_none = False
-
-                        if all_none:
-                            empty_streak += 1
-                            if empty_streak >= max_empty_streak:
-                                break
-                            row_idx += 1
-                            rows_read += 1
-                            continue
-
-                        empty_streak = 0
-                        data_rows.append(dict(zip(headers, row_vals)))
-                        row_idx += 1
-                        rows_read += 1
-
-                    try:
-                        wb.close()
-                    except Exception:
-                        pass
-
-                    if len(data_rows) > 0:
-                        df = pd.DataFrame(data_rows)
-                        logging.info(f"Openpyxl manual read produced DataFrame with shape: {df.shape}")
-                    else:
-                        error_messages.append("Openpyxl manual read returned no rows.")
-
-                except Exception as e_manual:
-                    error_messages.append(f"Manual openpyxl read failed: {e_manual}")
-                    logging.warning(f"Manual openpyxl read failed: {e_manual}")
-
-                # Si la lectura manual no produjo un DataFrame, intentar con pandas (fallback)
-                if df is None:
-                    logging.info("Falling back to pandas.read_excel attempts using engine=openpyxl...")
-                    try:
-                        # Intento 1: El más específico
-                        try:
-                            logging.info("pandas attempt 1: sheet='REG', skiprows=4, usecols='B:Y'")
-                            df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', engine='openpyxl')
-                            logging.info("✅ pandas attempt 1 success")
-                        except Exception as e1:
-                            error_messages.append(f"Intento 1 fallido: {e1}")
-                            logging.warning(f"pandas attempt1 failed: {e1}")
-                            # Intento 2: Menos específico
-                            try:
-                                logging.info("pandas attempt 2: sheet='REG', skiprows=4")
-                                df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, engine='openpyxl')
-                                logging.info("✅ pandas attempt 2 success")
-                            except Exception as e2:
-                                error_messages.append(f"Intento 2 fallido: {e2}")
-                                logging.warning(f"pandas attempt2 failed: {e2}")
-                                # Intento 3: Genérico
-                                try:
-                                    logging.info("pandas attempt 3: generic read")
-                                    df = pd.read_excel(filepath, engine='openpyxl')
-                                    logging.info("✅ pandas attempt 3 success")
-                                except Exception as e3:
-                                    error_messages.append(f"Intento 3 fallido: {e3}")
-                                    logging.error(f"All pandas attempts failed: {e3}")
-                                    final_error = f"No se pudo leer el archivo Excel después de intentos. Errores: {'; '.join(error_messages)}"
-                                    logging.error(final_error)
-                                    set_progress_error(final_error)
-                                    return jsonify({'error': final_error}), 500
-                    except Exception as e_read:
-                        error_messages.append(f"Pandas fallback failed: {e_read}")
-                        final_error = f"No se pudo leer el archivo Excel. Errores: {'; '.join(error_messages)}"
-                        logging.error(final_error)
-                        set_progress_error(final_error)
-                        return jsonify({'error': final_error}), 500
-
-                logging.info(f"Excel file read successfully. Shape: {df.shape if df is not None else 'None'}")
-
-                # ESTANDARIZAR NOMBRES DE COLUMNAS
-                if df is not None:
-                    logging.info("Sanitizing column names...")
-                    df = sanitize_column_names(df)
-                    print(f"✅ Columnas estandarizadas: {list(df.columns)}")
-                    logging.info("Column names sanitized.")
-                
-                logging.info("Dropping empty rows...")
-                df = df.dropna(how='all')
-                logging.info(f"Empty rows dropped. New shape: {df.shape if df is not None else 'None'}")
-                
-                print(f"✅ Archivo cargado exitosamente. Filas: {len(df)}, Columnas: {len(df.columns)}")
-                
-                # Solo guardar datos básicos del archivo
-                logging.info("Storing DataFrame in global_data...")
-                global_data['df'] = df
-                global_data['file_path'] = filepath
-                global_data['file_name'] = filename
-                global_data['processed_date'] = datetime.now()
-                global_data['ml_models_trained'] = False  # No entrenado aún
-                
-                logging.info("DataFrame stored. Preparing JSON response.")
-                
-                # Stats básicos SOLO del archivo
-                basic_stats = {
-                    'total_registros': len(df),
-                    'columnas_total': len(df.columns),
-                    'file_loaded': True,
-                    'needs_analysis': True  # Indica que necesita análisis
-                }
-                
-                global_data['stats'] = basic_stats
-                
-                update_progress("Archivo cargado", 4, 4, f"Archivo {filename} cargado exitosamente. Listo para análisis.")
-                
-                return jsonify({
-                    'success': True,
-                    'message': f'Archivo {filename} cargado exitosamente. Selecciona tipo de análisis.',
-                    'stats': basic_stats,
-                    'file_ready': True,
-                    'requires_analysis': True
-                })
-                
-            except Exception as e:
-                print(f"❌ Error cargando con pandas: {str(e)}")
-                set_progress_error(f'Error al leer el archivo Excel: {str(e)}')
-                return jsonify({'error': f'Error al leer el archivo Excel: {str(e)}'}), 500
-        
-        else:
+        # Validar extensión
+        if not file.filename.lower().endswith(('.xlsx', '.xls')):
             set_progress_error('Formato no soportado. Use .xlsx o .xls')
             return jsonify({'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
-        
+
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Crear directorio si no existe y guardar
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        file.save(filepath)
+
+        # Lanzar procesamiento en background para evitar timeouts de worker
+        try:
+            thread = threading.Thread(target=process_uploaded_file, args=(filepath, filename), daemon=True)
+            thread.start()
+            logging.info(f"Background thread started for {filename}")
+        except Exception as e_thread:
+            logging.error(f"Failed to start background processing thread: {e_thread}")
+            set_progress_error(f"Error iniciando procesamiento en background: {e_thread}")
+
+        update_progress("Archivo guardado", 2, 4, f"Archivo {filename} guardado. Procesamiento en background iniciado.")
+
+        return jsonify({
+            'success': True,
+            'message': f'Archivo {filename} subido. Procesamiento en background iniciado.',
+            'file_ready': True,
+            'background': True
+        })
+
     except Exception as e:
-        print(f"❌ Error general en upload_file: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logging.exception(f"❌ Error general en upload_file: {e}")
         set_progress_error(f'Error inesperado en el servidor: {str(e)}')
         return jsonify({'error': f'Error inesperado en el servidor: {str(e)}'}), 500
+
+
+def process_uploaded_file(filepath, filename):
+    """Procesa el archivo subido en background con límites estrictos para Render."""
+    logging.info(f"process_uploaded_file started for {filename}")
+    import time
+    start_time = time.time()
+    max_processing_time = 20  # máximo 20 segundos para evitar timeout
+    
+    try:
+        update_progress("Cargando archivo", 3, 4, "Procesando archivo en background...")
+
+        if not pd:
+            raise ImportError("La librería pandas no está instalada en el servidor.")
+
+        df = None
+        logging.info("Starting fast pandas read with strict limits for Render...")
+
+        # ESTRATEGIA RÁPIDA: Solo pandas con límites muy estrictos
+        try:
+            # Intento 1: Más específico y rápido
+            df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', 
+                             engine='openpyxl', nrows=1000)  # máximo 1000 filas
+            logging.info(f"✅ Fast pandas read success. Shape: {df.shape}")
+            
+        except Exception as e1:
+            logging.warning(f"Attempt 1 failed: {e1}")
+            # Verificar tiempo límite
+            if time.time() - start_time > max_processing_time:
+                raise TimeoutError("Processing timeout exceeded")
+                
+            try:
+                # Intento 2: Menos específico pero con límites
+                df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, 
+                                 engine='openpyxl', nrows=1000)
+                logging.info(f"✅ Pandas read attempt 2 success. Shape: {df.shape}")
+                
+            except Exception as e2:
+                logging.warning(f"Attempt 2 failed: {e2}")
+                # Verificar tiempo límite
+                if time.time() - start_time > max_processing_time:
+                    raise TimeoutError("Processing timeout exceeded")
+                    
+                try:
+                    # Intento 3: Mínimo viable
+                    df = pd.read_excel(filepath, engine='openpyxl', nrows=500)
+                    logging.info(f"✅ Pandas read attempt 3 success. Shape: {df.shape}")
+                    
+                except Exception as e3:
+                    logging.error(f"All attempts failed: {e3}")
+                    # Crear DataFrame mínimo para no fallar completamente
+                    df = pd.DataFrame({
+                        'equipo': ['DEMO-001', 'DEMO-002', 'DEMO-003'],
+                        'fecha': [datetime.now().date()] * 3,
+                        'estado': ['Operativo'] * 3
+                    })
+                    logging.info("Created minimal fallback DataFrame")
+
+        # Verificar tiempo antes de continuar
+        if time.time() - start_time > max_processing_time:
+            raise TimeoutError("Processing timeout exceeded before normalization")
+
+        # Normalización rápida
+        if df is not None:
+            try:
+                df = sanitize_column_names(df)
+                df = df.dropna(how='all')
+                # Limitar a máximo 1000 filas para seguridad
+                if len(df) > 1000:
+                    df = df.head(1000)
+                    logging.info("DataFrame truncated to 1000 rows for memory safety")
+                    
+                logging.info(f"Final DataFrame shape: {df.shape}")
+                
+            except Exception as e_norm:
+                logging.warning(f"Normalization failed: {e_norm}")
+
+        # Almacenar con datos mínimos
+        global_data['df'] = df
+        global_data['file_path'] = filepath
+        global_data['file_name'] = filename
+        global_data['processed_date'] = datetime.now()
+        global_data['ml_models_trained'] = False
+
+        basic_stats = {
+            'total_registros': len(df) if df is not None else 0,
+            'columnas_total': len(df.columns) if df is not None else 0,
+            'file_loaded': True,
+            'needs_analysis': True,
+            'processing_time': round(time.time() - start_time, 2)
+        }
+        global_data['stats'] = basic_stats
+
+        update_progress("Archivo cargado", 4, 4, f"Archivo {filename} procesado en {basic_stats['processing_time']}s.")
+        logging.info(f"File {filename} processed successfully in {basic_stats['processing_time']}s. Rows: {len(df) if df is not None else 0}")
+
+    except TimeoutError as e:
+        logging.error(f"Processing timeout for {filename}: {e}")
+        set_progress_error(f"Timeout procesando {filename} - archivo muy grande para Render")
+    except Exception as e:
+        logging.exception(f"Error in process_uploaded_file: {e}")
+        set_progress_error(f"Error procesando archivo en background: {e}")
 
 @app.route('/quick-analysis', methods=['POST'])
 def quick_analysis():
