@@ -29,6 +29,15 @@ if pd:
         print("✅ ML libraries loaded successfully")
     except ImportError as e:
         print(f"⚠️ ML libraries not available: {e}")
+
+# Importar motor de ML REAL
+try:
+    from src.real_ml_engine import RealCOTEMAMLEngine
+    REAL_ML_AVAILABLE = True
+    print("✅ Real ML Engine loaded successfully")
+except ImportError as e:
+    REAL_ML_AVAILABLE = False
+    print(f"⚠️ Real ML Engine not available: {e}")
         ML_AVAILABLE = False
     except Exception as e:
         print(f"❌ Error loading ML libraries: {e}")
@@ -1239,8 +1248,16 @@ class COTEMAMLEngine:
             print(f"Error in fallback FR-30 analysis: {e}")
             return None
 
-# Inicializar motor ML
-ml_engine = COTEMAMLEngine()
+# Inicializar motores ML
+ml_engine = COTEMAMLEngine()  # Motor estadístico original
+
+# Motor de ML REAL
+if REAL_ML_AVAILABLE:
+    real_ml_engine = RealCOTEMAMLEngine()
+    print("🤖 Real ML Engine initialized")
+else:
+    real_ml_engine = None
+    print("⚠️ Real ML Engine not available")
 
 @app.route('/')
 def index():
@@ -1911,6 +1928,119 @@ def frequency_analysis():
         return jsonify({
             'success': False,
             'error': f'Error ejecutando análisis de frecuencia: {str(e)}',
+            'data': None
+        })
+
+@app.route('/api/train-real-ml', methods=['POST'])
+def train_real_ml():
+    """API endpoint para entrenar modelos de ML REALES"""
+    try:
+        if not REAL_ML_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Motor de ML Real no está disponible',
+                'data': None
+            })
+        
+        if global_data['df'] is None:
+            return jsonify({
+                'success': False,
+                'error': 'No hay datos cargados para entrenar',
+                'data': None
+            })
+        
+        # Entrenar modelos de ML real en background
+        def train_background():
+            try:
+                set_progress('training_real_ml', 'Iniciando entrenamiento de ML Real...', 10)
+                
+                success = real_ml_engine.train_real_ml_models(global_data['df'])
+                
+                if success:
+                    set_progress('training_real_ml', 'Entrenamiento completado exitosamente', 100)
+                else:
+                    set_progress_error('Error en entrenamiento de ML Real')
+                    
+            except Exception as e:
+                set_progress_error(f'Error en entrenamiento: {str(e)}')
+        
+        # Iniciar entrenamiento en background
+        training_thread = threading.Thread(target=train_background, daemon=True)
+        training_thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Entrenamiento de ML Real iniciado en background',
+            'data': {
+                'training_started': True,
+                'check_progress_url': '/api/train-progress'
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error iniciando entrenamiento: {str(e)}',
+            'data': None
+        })
+
+@app.route('/api/real-ml-predict', methods=['POST'])
+def real_ml_predict():
+    """API endpoint para hacer predicciones con ML REAL"""
+    try:
+        if not REAL_ML_AVAILABLE or not real_ml_engine.is_trained:
+            return jsonify({
+                'success': False,
+                'error': 'Motor de ML Real no entrenado',
+                'data': None
+            })
+        
+        if global_data['df'] is None:
+            return jsonify({
+                'success': False,
+                'error': 'No hay datos disponibles',
+                'data': None
+            })
+        
+        # Hacer predicciones
+        predictions = real_ml_engine.predict_with_real_ml(df=global_data['df'])
+        
+        return jsonify({
+            'success': True,
+            'data': predictions,
+            'message': 'Predicciones ML Real completadas'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error en predicciones: {str(e)}',
+            'data': None
+        })
+
+@app.route('/api/real-ml-insights')
+def real_ml_insights():
+    """API endpoint para obtener insights del ML REAL"""
+    try:
+        if not REAL_ML_AVAILABLE or not real_ml_engine.is_trained:
+            return jsonify({
+                'success': False,
+                'error': 'Motor de ML Real no entrenado',
+                'data': None
+            })
+        
+        insights = real_ml_engine.get_model_insights()
+        
+        return jsonify({
+            'success': True,
+            'data': insights,
+            'message': 'Insights ML Real obtenidos exitosamente'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error obteniendo insights: {str(e)}',
             'data': None
         })
 

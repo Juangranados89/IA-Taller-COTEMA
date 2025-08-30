@@ -223,6 +223,19 @@ const APIClient = {
     // Análisis de frecuencia mensual
     getFrequencyAnalysis: async () => {
         return await APIClient.request('/api/frequency-analysis');
+    },
+
+    // Real ML APIs
+    trainRealML: async () => {
+        return await APIClient.request('/api/train-real-ml', { method: 'POST' });
+    },
+
+    getRealMLPredictions: async () => {
+        return await APIClient.request('/api/real-ml-predict', { method: 'POST' });
+    },
+
+    getRealMLInsights: async () => {
+        return await APIClient.request('/api/real-ml-insights');
     }
 };
 
@@ -362,6 +375,335 @@ const ChartGenerator = {
 
         const config = { responsive: true, displayModeBar: true };
         Plotly.newPlot(containerId, [trace], layout, config);
+    }
+};
+
+// Manejador de Machine Learning REAL
+const RealMLManager = {
+    currentData: null,
+    isTraining: false,
+    isModelTrained: false,
+
+    // Entrenar modelos de ML real
+    trainModels: async () => {
+        try {
+            if (RealMLManager.isTraining) {
+                Utils.showNotification('Ya hay un entrenamiento en progreso', 'warning');
+                return;
+            }
+
+            RealMLManager.isTraining = true;
+            Utils.showLoading('realMLResults', 'Entrenando modelos de Machine Learning REAL...');
+            
+            const response = await APIClient.trainRealML();
+            
+            if (!response.success) {
+                throw new Error(response.error);
+            }
+            
+            Utils.showNotification('Entrenamiento de ML Real iniciado', 'success');
+            
+            // Monitorear progreso
+            RealMLManager.monitorTraining();
+            
+        } catch (error) {
+            RealMLManager.isTraining = false;
+            Utils.showError('realMLResults', error.message);
+            Utils.showNotification(`Error: ${error.message}`, 'error');
+        }
+    },
+
+    // Monitorear progreso de entrenamiento
+    monitorTraining: async () => {
+        const checkProgress = async () => {
+            try {
+                const progressResponse = await APIClient.request('/api/progress');
+                
+                if (progressResponse.training_real_ml) {
+                    const progress = progressResponse.training_real_ml;
+                    
+                    if (progress.status === 'completed') {
+                        RealMLManager.isTraining = false;
+                        RealMLManager.isModelTrained = true;
+                        Utils.showNotification('¡Modelos de ML Real entrenados exitosamente!', 'success');
+                        RealMLManager.showTrainingComplete();
+                        return;
+                    } else if (progress.status === 'error') {
+                        RealMLManager.isTraining = false;
+                        Utils.showError('realMLResults', progress.message);
+                        return;
+                    }
+                    
+                    // Continuar monitoreando
+                    setTimeout(checkProgress, 2000);
+                }
+            } catch (error) {
+                console.error('Error monitoring training:', error);
+                setTimeout(checkProgress, 3000);
+            }
+        };
+        
+        checkProgress();
+    },
+
+    // Mostrar entrenamiento completado
+    showTrainingComplete: () => {
+        const container = document.getElementById('realMLResults');
+        
+        container.innerHTML = `
+            <div class="alert alert-success" role="alert">
+                <i class="fas fa-check-circle"></i>
+                <strong>¡Entrenamiento Completado!</strong> Los modelos de Machine Learning REAL han sido entrenados exitosamente.
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <button class="btn btn-primary btn-lg w-100" onclick="RealMLManager.getPredictions()">
+                        <i class="fas fa-magic"></i> Ver Predicciones ML
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-info btn-lg w-100" onclick="RealMLManager.getInsights()">
+                        <i class="fas fa-lightbulb"></i> Ver Insights del Modelo
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    // Obtener predicciones
+    getPredictions: async () => {
+        try {
+            Utils.showLoading('realMLResults', 'Generando predicciones con ML Real...');
+            
+            const response = await APIClient.getRealMLPredictions();
+            
+            if (!response.success) {
+                throw new Error(response.error);
+            }
+            
+            RealMLManager.currentData = response.data;
+            RealMLManager.displayPredictions(response.data);
+            
+            Utils.showNotification('Predicciones ML Real generadas exitosamente', 'success');
+            
+        } catch (error) {
+            Utils.showError('realMLResults', error.message);
+            Utils.showNotification(`Error: ${error.message}`, 'error');
+        }
+    },
+
+    // Mostrar predicciones
+    displayPredictions: (data) => {
+        const container = document.getElementById('realMLResults');
+        
+        const modelInfo = data.model_info || {};
+        const models = Object.keys(data).filter(key => key !== 'model_info');
+        
+        container.innerHTML = `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4><i class="fas fa-brain"></i> Predicciones con Machine Learning REAL</h4>
+                    <p class="text-muted">
+                        Modelos entrenados: ${modelInfo.models_available ? modelInfo.models_available.join(', ') : 'N/A'} |
+                        Features utilizadas: ${modelInfo.feature_count || 'N/A'}
+                    </p>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <button class="btn btn-outline-primary" onclick="RealMLManager.getInsights()">
+                        <i class="fas fa-chart-bar"></i> Ver Insights del Modelo
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-outline-success" onclick="RealMLManager.trainModels()">
+                        <i class="fas fa-sync"></i> Reentrenar Modelos
+                    </button>
+                </div>
+            </div>
+            
+            <div class="row">
+                ${models.map(modelName => {
+                    const modelData = data[modelName];
+                    return `
+                        <div class="col-lg-6 mb-4">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5><i class="fas fa-cog"></i> ${modelName.toUpperCase()}</h5>
+                                </div>
+                                <div class="card-body">
+                                    ${RealMLManager.renderModelData(modelName, modelData)}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    },
+
+    // Renderizar datos de modelo específico
+    renderModelData: (modelName, modelData) => {
+        if (modelName === 'clustering') {
+            const clusters = modelData.clusters || [];
+            const uniqueClusters = [...new Set(clusters)];
+            
+            return `
+                <h6>Clustering de Equipos</h6>
+                <p><strong>Clusters identificados:</strong> ${uniqueClusters.length}</p>
+                <p><strong>Equipos agrupados:</strong> ${clusters.length}</p>
+                <small class="text-muted">Los equipos han sido agrupados automáticamente por comportamiento similar</small>
+            `;
+        } else if (modelData.predictions) {
+            const predictions = modelData.predictions;
+            const confidence = modelData.confidence;
+            
+            return `
+                <h6>Predicciones del Modelo</h6>
+                <p><strong>Predicciones generadas:</strong> ${predictions.length}</p>
+                ${Array.isArray(confidence) ? 
+                    `<p><strong>Confianza promedio:</strong> ${(confidence.reduce((a,b) => a+b, 0) / confidence.length * 100).toFixed(1)}%</p>` :
+                    `<p><strong>Confianza:</strong> ${confidence}</p>`
+                }
+                <div style="max-height: 200px; overflow-y: auto;">
+                    <small class="text-muted">
+                        Primeras predicciones: ${predictions.slice(0, 10).map(p => typeof p === 'number' ? p.toFixed(2) : p).join(', ')}
+                        ${predictions.length > 10 ? '...' : ''}
+                    </small>
+                </div>
+            `;
+        }
+        
+        return '<p class="text-muted">Datos de modelo no disponibles</p>';
+    },
+
+    // Obtener insights del modelo
+    getInsights: async () => {
+        try {
+            Utils.showLoading('realMLResults', 'Obteniendo insights del modelo...');
+            
+            const response = await APIClient.getRealMLInsights();
+            
+            if (!response.success) {
+                throw new Error(response.error);
+            }
+            
+            RealMLManager.displayInsights(response.data);
+            
+            Utils.showNotification('Insights obtenidos exitosamente', 'success');
+            
+        } catch (error) {
+            Utils.showError('realMLResults', error.message);
+            Utils.showNotification(`Error: ${error.message}`, 'error');
+        }
+    },
+
+    // Mostrar insights
+    displayInsights: (data) => {
+        const container = document.getElementById('realMLResults');
+        
+        const featureImportance = data.feature_importance || {};
+        const performance = data.model_performance || {};
+        const recommendations = data.recommendations || [];
+        
+        container.innerHTML = `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4><i class="fas fa-lightbulb"></i> Insights del Machine Learning REAL</h4>
+                    <p class="text-muted">Análisis automático de lo que los modelos aprendieron de tus datos</p>
+                </div>
+            </div>
+            
+            ${recommendations.length > 0 ? `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-recommendations"></i> Recomendaciones Automáticas:</h6>
+                        <ul class="mb-0">
+                            ${recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5><i class="fas fa-chart-bar"></i> Feature Importance</h5>
+                        </div>
+                        <div class="card-body">
+                            ${Object.keys(featureImportance).length > 0 ? 
+                                Object.entries(featureImportance).map(([modelName, features]) => `
+                                    <h6>${modelName}</h6>
+                                    <div class="mb-3">
+                                        ${features.slice(0, 5).map(f => `
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <small>${f.feature}</small>
+                                                <small><strong>${(f.importance * 100).toFixed(1)}%</strong></small>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 5px;">
+                                                <div class="progress-bar" style="width: ${(f.importance * 100).toFixed(1)}%"></div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                `).join('') :
+                                '<p class="text-muted">No hay datos de importancia de features disponibles</p>'
+                            }
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5><i class="fas fa-tachometer-alt"></i> Performance de Modelos</h5>
+                        </div>
+                        <div class="card-body">
+                            ${Object.keys(performance).length > 0 ? 
+                                Object.entries(performance).map(([modelName, perf]) => `
+                                    <div class="mb-3">
+                                        <h6>${modelName}</h6>
+                                        <small class="text-muted">Tipo: ${perf.type}</small><br>
+                                        ${perf.type === 'classification' ? `
+                                            <small>Precisión: <strong>${(perf.cv_mean * 100).toFixed(1)}%</strong></small><br>
+                                            <small>Muestras: ${perf.n_samples}</small>
+                                        ` : perf.type === 'regression' ? `
+                                            <small>R² Score: <strong>${(perf.cv_r2_mean * 100).toFixed(1)}%</strong></small><br>
+                                            <small>RMSE: ${perf.rmse ? perf.rmse.toFixed(2) : 'N/A'}</small><br>
+                                            <small>Modelo: ${perf.model_used || 'N/A'}</small><br>
+                                            <small>Muestras: ${perf.n_samples}</small>
+                                        ` : perf.type === 'clustering' ? `
+                                            <small>Clusters: <strong>${perf.n_clusters}</strong></small><br>
+                                            <small>Silhouette Score: ${perf.silhouette_score ? perf.silhouette_score.toFixed(3) : 'N/A'}</small><br>
+                                            <small>Muestras: ${perf.n_samples}</small>
+                                        ` : ''}
+                                    </div>
+                                    <hr>
+                                `).join('') :
+                                '<p class="text-muted">No hay datos de performance disponibles</p>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <button class="btn btn-primary" onclick="RealMLManager.getPredictions()">
+                        <i class="fas fa-arrow-left"></i> Volver a Predicciones
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-success" onclick="RealMLManager.trainModels()">
+                        <i class="fas fa-sync"></i> Reentrenar Modelos
+                    </button>
+                </div>
+            </div>
+        `;
     }
 };
 
@@ -936,6 +1278,11 @@ document.addEventListener('DOMContentLoaded', function() {
         FrequencyAnalysisManager.analyze();
     };
 
+    // Función global para entrenar ML real (llamada desde el HTML)
+    window.trainRealML = function() {
+        RealMLManager.trainModels();
+    };
+
     // Test de conexión inicial
     APIClient.connectionTest()
         .then(data => {
@@ -952,3 +1299,4 @@ window.APIClient = APIClient;
 window.ChartGenerator = ChartGenerator;
 window.KPIManager = KPIManager;
 window.FrequencyAnalysisManager = FrequencyAnalysisManager;
+window.RealMLManager = RealMLManager;

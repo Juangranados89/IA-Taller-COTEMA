@@ -126,6 +126,12 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="real-ml-tab" data-bs-toggle="tab" data-bs-target="#real-ml" type="button" role="tab">
+                <i class="fas fa-robot"></i>
+                Machine Learning REAL
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="frequency-tab" data-bs-toggle="tab" data-bs-target="#frequency" type="button" role="tab">
                 <i class="fas fa-calendar-alt"></i>
                 Análisis de Frecuencia
@@ -263,6 +269,72 @@
                             <i class="fas fa-calculator fa-3x"></i>
                             <h4>KPIs Predictivos</h4>
                             <p>Selecciona un mes en el panel lateral y haz clic en "Calcular KPIs" para generar los análisis predictivos.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Real ML Tab -->
+        <div class="tab-pane fade" id="real-ml" role="tabpanel">
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4><i class="fas fa-robot"></i> Machine Learning REAL</h4>
+                        <button class="btn btn-success btn-lg" onclick="RealMLManager.trainModels()">
+                            <i class="fas fa-brain"></i> Entrenar Modelos ML
+                        </button>
+                    </div>
+                    
+                    <div class="alert alert-primary" role="alert">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Machine Learning Verdadero:</strong> A diferencia de los KPIs predictivos (que usan fórmulas estadísticas), 
+                        esta sección entrena algoritmos de ML que <strong>APRENDEN</strong> automáticamente de tus datos históricos de COTEMA.
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-body">
+                                    <h5 class="card-title text-success">
+                                        <i class="fas fa-check-circle"></i> ¿Qué hace el ML Real?
+                                    </h5>
+                                    <ul class="mb-0">
+                                        <li><strong>Feature Engineering Automático:</strong> Descubre qué variables son predictivas</li>
+                                        <li><strong>Modelos Entrenados:</strong> RandomForest, XGBoost, Clustering</li>
+                                        <li><strong>Aprendizaje Verdadero:</strong> Mejora con más datos históricos</li>
+                                        <li><strong>Validación Cruzada:</strong> Métricas de precisión reales</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card border-warning">
+                                <div class="card-body">
+                                    <h5 class="card-title text-warning">
+                                        <i class="fas fa-exclamation-triangle"></i> Diferencias vs KPIs Predictivos
+                                    </h5>
+                                    <ul class="mb-0">
+                                        <li><strong>KPIs:</strong> Fórmulas fijas programadas por humanos</li>
+                                        <li><strong>ML Real:</strong> Algoritmos que aprenden patrones automáticamente</li>
+                                        <li><strong>KPIs:</strong> Mismo resultado siempre</li>
+                                        <li><strong>ML Real:</strong> Mejora conforme se añaden datos</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="realMLResults">
+                        <div class="text-center text-muted p-5">
+                            <i class="fas fa-robot fa-3x"></i>
+                            <h4>Machine Learning Real</h4>
+                            <p>Haz clic en "Entrenar Modelos ML" para que los algoritmos aprendan automáticamente de tus datos de COTEMA.</p>
+                            <small class="text-muted">
+                                El entrenamiento tomará unos minutos y generará modelos que descubren patrones ocultos 
+                                en tus datos históricos sin reglas predefinidas.
+                            </small>
                         </div>
                     </div>
                 </div>
