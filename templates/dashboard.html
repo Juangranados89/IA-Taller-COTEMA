@@ -274,26 +274,38 @@
             <div class="row mt-3">
                 <div class="col-12">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4><i class="fas fa-calendar-alt"></i> Análisis de Frecuencia Mensual</h4>
+                        <h4><i class="fas fa-calendar-alt"></i> Análisis de Frecuencia Mensual - Metodología Mejorada</h4>
                         <button class="btn btn-primary" onclick="analyzeFrequency()">
                             <i class="fas fa-chart-line"></i> Ejecutar Análisis
                         </button>
                     </div>
                     
+                    <div class="alert alert-success" role="alert">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Metodología Mejorada:</strong> Este análisis ahora distingue entre:
+                        <ul class="mt-2 mb-0">
+                            <li><strong>Mantenimientos Correctivos:</strong> Fallos reales que indican riesgo futuro</li>
+                            <li><strong>Mantenimientos Preventivos:</strong> Programados para EVITAR fallos (no indican riesgo)</li>
+                            <li><strong>Equipos Activos:</strong> Solo analiza equipos con actividad en los últimos 6 meses</li>
+                            <li><strong>Tiempo en Taller:</strong> Ya no penaliza overhauls programados o mantenimientos complejos</li>
+                        </ul>
+                    </div>
+                    
                     <div class="alert alert-info" role="alert">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Análisis de Frecuencia:</strong> Esta herramienta analiza qué equipos tienen más ingresos por mes 
-                        y proyecta cuáles podrían fallar el próximo mes basándose en patrones históricos de frecuencia.
+                        <strong>¿Qué analiza?</strong> Identifica equipos activos con alta frecuencia de mantenimientos correctivos 
+                        y proyecta probabilidades reales de fallo para el próximo mes, excluyendo equipos inactivos como 
+                        <code>EX-TC15, AH-ED03, CG-TC06, CV-CO02, RE-UN03</code> que pueden estar en overhaul programado.
                     </div>
                     
                     <div id="frequencyResults">
                         <div class="text-center text-muted p-5">
                             <i class="fas fa-calendar-alt fa-3x"></i>
-                            <h4>Análisis de Frecuencia</h4>
-                            <p>Haz clic en "Ejecutar Análisis" para analizar la frecuencia de ingresos de equipos y generar proyecciones de fallos.</p>
+                            <h4>Análisis de Frecuencia Inteligente</h4>
+                            <p>Haz clic en "Ejecutar Análisis" para obtener proyecciones precisas de fallos basadas en mantenimientos correctivos.</p>
                             <small class="text-muted">
-                                Este análisis identifica equipos con mayor frecuencia de entrada al taller y 
-                                predice probabilidades de fallo para el próximo mes.
+                                <strong>Nuevo enfoque:</strong> Distingue entre fallos reales y mantenimientos programados, 
+                                enfocándose solo en equipos activos con riesgo genuino.
                             </small>
                         </div>
                     </div>

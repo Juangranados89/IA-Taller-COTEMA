@@ -530,6 +530,7 @@ class COTEMAMLEngine:
             # Buscar columnas necesarias
             codigo_col = None
             fecha_col = None
+            fecha_out_col = None
             tipo_atencion_col = None
             
             # Detectar columna de código
@@ -544,6 +545,13 @@ class COTEMAMLEngine:
                 col_name = str(col).lower()
                 if 'fecha_in' in col_name or ('fecha' in col_name and 'in' in col_name):
                     fecha_col = col
+                    break
+            
+            # Detectar columna de fecha de salida
+            for col in analysis_df.columns:
+                col_name = str(col).lower()
+                if 'fecha_out' in col_name or ('fecha' in col_name and 'out' in col_name):
+                    fecha_out_col = col
                     break
             
             # Detectar tipo de atención
@@ -562,6 +570,11 @@ class COTEMAMLEngine:
             
             # Convertir fechas
             analysis_df[fecha_col] = pd.to_datetime(analysis_df[fecha_col], errors='coerce')
+            if fecha_out_col:
+                analysis_df[fecha_out_col] = pd.to_datetime(analysis_df[fecha_out_col], errors='coerce')
+                # Calcular días en taller
+                analysis_df['dias_en_taller'] = (analysis_df[fecha_out_col] - analysis_df[fecha_col]).dt.days
+            
             analysis_df = analysis_df.dropna(subset=[fecha_col, codigo_col])
             
             # Extraer mes y año
@@ -569,135 +582,237 @@ class COTEMAMLEngine:
             analysis_df['año'] = analysis_df[fecha_col].dt.year
             analysis_df['mes_año'] = analysis_df[fecha_col].dt.to_period('M')
             
-            # 1. ANÁLISIS DE FRECUENCIA MENSUAL
-            frecuencia_mensual = analysis_df.groupby([codigo_col, 'mes_año']).size().reset_index(name='ingresos_mes')
+            # ======= NUEVA LÓGICA: FILTRAR EQUIPOS ACTIVOS =======
+            fecha_limite_actividad = datetime.now() - timedelta(days=180)  # 6 meses
+            equipos_activos_recientes = analysis_df[
+                analysis_df[fecha_col] >= fecha_limite_actividad
+            ][codigo_col].unique()
             
-            # Promedios por equipo
-            frecuencia_promedio = frecuencia_mensual.groupby(codigo_col).agg({
-                'ingresos_mes': ['mean', 'sum', 'count', 'std']
+            print(f"🔍 Equipos con actividad reciente (últimos 6 meses): {len(equipos_activos_recientes)}")
+            
+            # ======= CLASIFICAR TIPOS DE MANTENIMIENTO =======
+            if tipo_atencion_col:
+                # Separar entre mantenimientos correctivos (problemáticos) y preventivos (buenos)
+                mantenimientos_problematicos = analysis_df[
+                    analysis_df[tipo_atencion_col].str.contains('CORRECTIVA', na=False)
+                ].copy()
+                
+                mantenimientos_preventivos = analysis_df[
+                    analysis_df[tipo_atencion_col].str.contains('PREVENTIVA|ALISTAMIENTO', na=False)
+                ].copy()
+                
+                print(f"📊 Mantenimientos correctivos: {len(mantenimientos_problematicos)}")
+                print(f"🔧 Mantenimientos preventivos: {len(mantenimientos_preventivos)}")
+            else:
+                # Si no hay tipo de atención, usar tiempo en taller como indicador
+                if 'dias_en_taller' in analysis_df.columns:
+                    umbral_dias = analysis_df['dias_en_taller'].quantile(0.75)  # 75% percentil
+                    mantenimientos_problematicos = analysis_df[
+                        (analysis_df['dias_en_taller'] <= umbral_dias) | 
+                        (analysis_df['dias_en_taller'].isna())
+                    ].copy()
+                    mantenimientos_preventivos = analysis_df[
+                        analysis_df['dias_en_taller'] > umbral_dias
+                    ].copy()
+                else:
+                    mantenimientos_problematicos = analysis_df.copy()
+                    mantenimientos_preventivos = pd.DataFrame()
+            
+            # 1. ANÁLISIS DE FRECUENCIA CORREGIDO - SOLO MANTENIMIENTOS PROBLEMÁTICOS
+            # Usar principalmente mantenimientos correctivos para calcular riesgo de fallo
+            frecuencia_problematica = mantenimientos_problematicos.groupby([codigo_col, 'mes_año']).size().reset_index(name='ingresos_correctivos_mes')
+            
+            # Promedios por equipo solo para mantenimientos problemáticos
+            frecuencia_riesgo = frecuencia_problematica.groupby(codigo_col).agg({
+                'ingresos_correctivos_mes': ['mean', 'sum', 'count', 'std']
             }).round(2)
             
-            frecuencia_promedio.columns = ['promedio_ingresos_mes', 'total_ingresos', 'meses_activos', 'desviacion_std']
-            frecuencia_promedio = frecuencia_promedio.reset_index()
-            frecuencia_promedio['desviacion_std'] = frecuencia_promedio['desviacion_std'].fillna(0)
+            frecuencia_riesgo.columns = ['promedio_correctivos_mes', 'total_correctivos', 'meses_con_correctivos', 'desviacion_correctivos']
+            frecuencia_riesgo = frecuencia_riesgo.reset_index()
+            frecuencia_riesgo['desviacion_correctivos'] = frecuencia_riesgo['desviacion_correctivos'].fillna(0)
             
-            # Calcular score de riesgo
-            frecuencia_promedio['score_riesgo'] = (
-                frecuencia_promedio['promedio_ingresos_mes'] * 0.4 +
-                frecuencia_promedio['desviacion_std'] * 0.3 +
-                (frecuencia_promedio['total_ingresos'] / frecuencia_promedio['meses_activos']) * 0.3
+            # Análisis de frecuencia total (para contexto)
+            frecuencia_total = analysis_df.groupby([codigo_col, 'mes_año']).size().reset_index(name='ingresos_totales_mes')
+            frecuencia_total_stats = frecuencia_total.groupby(codigo_col).agg({
+                'ingresos_totales_mes': ['mean', 'sum', 'count']
+            }).round(2)
+            frecuencia_total_stats.columns = ['promedio_total_mes', 'total_ingresos', 'meses_activos']
+            frecuencia_total_stats = frecuencia_total_stats.reset_index()
+            
+            # Combinar estadísticas
+            frecuencia_combined = frecuencia_total_stats.merge(
+                frecuencia_riesgo, on=codigo_col, how='left'
+            ).fillna(0)
+            
+            # ======= NUEVO SCORE DE RIESGO MEJORADO =======
+            # Score basado SOLO en mantenimientos correctivos (problemáticos)
+            frecuencia_combined['ratio_correctivos'] = (
+                frecuencia_combined['total_correctivos'] / 
+                (frecuencia_combined['total_ingresos'] + 1)  # +1 para evitar división por 0
             )
             
-            # 2. ANÁLISIS POR TIPO DE ATENCIÓN (si está disponible)
+            # Filtrar solo equipos activos para scoring
+            frecuencia_combined['es_activo'] = frecuencia_combined[codigo_col].isin(equipos_activos_recientes)
+            
+            # Score de riesgo mejorado
+            frecuencia_combined['score_riesgo'] = (
+                frecuencia_combined['promedio_correctivos_mes'] * 0.5 +  # Mayor peso a correctivos
+                frecuencia_combined['ratio_correctivos'] * 0.3 +          # Proporción de correctivos
+                frecuencia_combined['desviacion_correctivos'] * 0.2       # Variabilidad
+            ) * frecuencia_combined['es_activo'].astype(int)  # Solo equipos activos
+            
+            # 2. ANÁLISIS POR TIPO DE ATENCIÓN MEJORADO
             if tipo_atencion_col:
                 tipo_atencion_stats = analysis_df.groupby([codigo_col, tipo_atencion_col]).size().unstack(fill_value=0)
                 
-                # Calcular peso de criticidad
+                # Pesos de criticidad CORREGIDOS
                 pesos_criticidad = {
-                    'CORRECTIVA': 3.0,
-                    'ALISTAMIENTO-TC': 2.0,
-                    'PREVENTIVA': 1.0
+                    'CORRECTIVA': 4.0,          # MUY ALTO riesgo (fallo real)
+                    'ALISTAMIENTO-TC': 1.5,     # BAJO riesgo (mantenimiento programado)
+                    'PREVENTIVA': 0.5           # MUY BAJO riesgo (mantenimiento preventivo)
                 }
                 
-                for equipo_idx in frecuencia_promedio.index:
-                    equipo = frecuencia_promedio.loc[equipo_idx, codigo_col]
+                for equipo_idx in frecuencia_combined.index:
+                    equipo = frecuencia_combined.loc[equipo_idx, codigo_col]
                     if equipo in tipo_atencion_stats.index:
                         peso_total = 0
+                        total_ingresos = 0
                         for tipo_atencion, peso in pesos_criticidad.items():
                             if tipo_atencion in tipo_atencion_stats.columns:
                                 count = tipo_atencion_stats.loc[equipo, tipo_atencion]
                                 peso_total += count * peso
+                                total_ingresos += count
                         
-                        frecuencia_promedio.loc[equipo_idx, 'factor_criticidad'] = peso_total / frecuencia_promedio.loc[equipo_idx, 'total_ingresos']
+                        if total_ingresos > 0:
+                            frecuencia_combined.loc[equipo_idx, 'factor_criticidad'] = peso_total / total_ingresos
+                        else:
+                            frecuencia_combined.loc[equipo_idx, 'factor_criticidad'] = 0.5
                     else:
-                        frecuencia_promedio.loc[equipo_idx, 'factor_criticidad'] = 1.5  # valor medio
+                        frecuencia_combined.loc[equipo_idx, 'factor_criticidad'] = 1.0  # valor neutro
             else:
-                frecuencia_promedio['factor_criticidad'] = 1.5
+                frecuencia_combined['factor_criticidad'] = 1.0
             
-            # Recalcular score de riesgo incluyendo criticidad
-            frecuencia_promedio['score_riesgo_final'] = (
-                frecuencia_promedio['score_riesgo'] * 0.6 +
-                frecuencia_promedio['factor_criticidad'] * 0.4
-            )
+            # Recalcular score de riesgo final
+            frecuencia_combined['score_riesgo_final'] = (
+                frecuencia_combined['score_riesgo'] * 0.7 +
+                frecuencia_combined['factor_criticidad'] * 0.3
+            ) * frecuencia_combined['es_activo'].astype(int)
             
-            # Ordenar por score de riesgo
-            equipos_mas_frecuentes = frecuencia_promedio.sort_values('score_riesgo_final', ascending=False).head(10)
+            # Filtrar y ordenar solo equipos activos con riesgo real
+            equipos_riesgo = frecuencia_combined[
+                (frecuencia_combined['es_activo']) & 
+                (frecuencia_combined['score_riesgo_final'] > 0.1)  # Umbral mínimo
+            ].sort_values('score_riesgo_final', ascending=False).head(10)
             
-            # 3. PROYECCIÓN PARA EL PRÓXIMO MES
+            print(f"📈 Equipos activos con riesgo identificado: {len(equipos_riesgo)}")
+            
+            # 3. PROYECCIÓN MEJORADA PARA EL PRÓXIMO MES
             fecha_actual = datetime.now()
             proximo_mes = fecha_actual + timedelta(days=30)
             
             proyecciones = []
-            for _, equipo_row in equipos_mas_frecuentes.iterrows():
+            for _, equipo_row in equipos_riesgo.iterrows():
                 equipo = equipo_row[codigo_col]
                 
-                # Probabilidad basada en frecuencia histórica
-                prob_base = min(0.85, equipo_row['promedio_ingresos_mes'] / 5.0)
+                # NUEVA LÓGICA DE PROBABILIDAD
+                # Base: frecuencia de mantenimientos correctivos (problemáticos)
+                if equipo_row['promedio_correctivos_mes'] > 0:
+                    prob_base = min(0.70, equipo_row['promedio_correctivos_mes'] / 3.0)  # Reducir probabilidad base
+                else:
+                    prob_base = 0.05  # Muy baja si no hay correctivos recientes
                 
-                # Ajuste por criticidad
-                prob_ajustada = prob_base * (1 + equipo_row['factor_criticidad'] / 10)
-                prob_ajustada = min(0.95, prob_ajustada)
+                # Ajuste por criticidad (solo si es problemática)
+                if equipo_row['factor_criticidad'] > 2.0:  # Solo penalizar si es alta criticidad
+                    prob_ajustada = prob_base * (1 + (equipo_row['factor_criticidad'] - 2.0) / 5)
+                else:
+                    prob_ajustada = prob_base * 0.8  # Reducir si es preventivo
                 
-                # Tendencia reciente (últimos 3 meses)
+                prob_ajustada = max(0.05, min(0.85, prob_ajustada))  # Limitar rango
+                
+                # Tendencia reciente SOLO en correctivos
                 try:
-                    datos_recientes = analysis_df[
-                        (analysis_df[codigo_col] == equipo) & 
-                        (analysis_df[fecha_col] >= fecha_actual - timedelta(days=90))
+                    datos_correctivos_recientes = mantenimientos_problematicos[
+                        (mantenimientos_problematicos[codigo_col] == equipo) & 
+                        (mantenimientos_problematicos[fecha_col] >= fecha_actual - timedelta(days=90))
                     ]
-                    tendencia = len(datos_recientes) / 3.0  # promedio últimos 3 meses
-                    if tendencia > equipo_row['promedio_ingresos_mes']:
-                        prob_ajustada *= 1.2  # aumentar si tendencia es creciente
+                    tendencia_correctivos = len(datos_correctivos_recientes) / 3.0
+                    
+                    if tendencia_correctivos > equipo_row['promedio_correctivos_mes']:
+                        prob_ajustada *= 1.3  # Aumentar si tendencia correctiva creciente
+                    elif tendencia_correctivos == 0:
+                        prob_ajustada *= 0.5  # Reducir mucho si no hay correctivos recientes
+                        
                 except:
-                    tendencia = equipo_row['promedio_ingresos_mes']
+                    tendencia_correctivos = equipo_row['promedio_correctivos_mes']
                 
                 # Días estimados hasta próximo ingreso
-                if equipo_row['promedio_ingresos_mes'] > 0:
-                    dias_promedio_entre_ingresos = 30 / equipo_row['promedio_ingresos_mes']
+                if equipo_row['promedio_total_mes'] > 0:
+                    dias_promedio_entre_ingresos = 30 / equipo_row['promedio_total_mes']
                     dias_estimados = max(1, int(dias_promedio_entre_ingresos))
                 else:
-                    dias_estimados = 60
+                    dias_estimados = 90  # Si no hay actividad, asumir 3 meses
                 
-                proyecciones.append({
-                    'equipo': equipo,
-                    'probabilidad_fallo_proximo_mes': round(min(0.95, prob_ajustada), 3),
-                    'promedio_ingresos_mensual': round(equipo_row['promedio_ingresos_mes'], 2),
-                    'total_ingresos_historicos': int(equipo_row['total_ingresos']),
-                    'score_riesgo': round(equipo_row['score_riesgo_final'], 2),
-                    'factor_criticidad': round(equipo_row['factor_criticidad'], 2),
-                    'dias_estimados_proximo_ingreso': dias_estimados,
-                    'tendencia_reciente': round(tendencia, 2)
-                })
+                # Solo incluir equipos con probabilidad significativa
+                if prob_ajustada >= 0.15:  # Umbral mínimo del 15%
+                    proyecciones.append({
+                        'equipo': equipo,
+                        'probabilidad_fallo_proximo_mes': round(prob_ajustada, 3),
+                        'promedio_correctivos_mensual': round(equipo_row['promedio_correctivos_mes'], 2),
+                        'promedio_total_mensual': round(equipo_row['promedio_total_mes'], 2),
+                        'total_ingresos_historicos': int(equipo_row['total_ingresos']),
+                        'ratio_correctivos': round(equipo_row['ratio_correctivos'], 2),
+                        'score_riesgo': round(equipo_row['score_riesgo_final'], 2),
+                        'factor_criticidad': round(equipo_row['factor_criticidad'], 2),
+                        'dias_estimados_proximo_ingreso': dias_estimados,
+                        'tendencia_correctivos_reciente': round(tendencia_correctivos, 2),
+                        'es_equipo_activo': True
+                    })
             
             # Preparar resultado final
             equipos_frecuentes_resultado = []
-            for _, row in equipos_mas_frecuentes.iterrows():
+            for _, row in equipos_riesgo.iterrows():
                 equipos_frecuentes_resultado.append({
                     'equipo': row[codigo_col],
-                    'promedio_ingresos_mes': round(row['promedio_ingresos_mes'], 2),
+                    'promedio_correctivos_mes': round(row['promedio_correctivos_mes'], 2),
+                    'promedio_total_mes': round(row['promedio_total_mes'], 2),
                     'total_ingresos': int(row['total_ingresos']),
+                    'total_correctivos': int(row['total_correctivos']),
+                    'ratio_correctivos': round(row['ratio_correctivos'], 2),
                     'meses_activos': int(row['meses_activos']),
-                    'desviacion_std': round(row['desviacion_std'], 2),
                     'factor_criticidad': round(row['factor_criticidad'], 2),
-                    'score_riesgo': round(row['score_riesgo_final'], 2)
+                    'score_riesgo': round(row['score_riesgo_final'], 2),
+                    'es_activo': True
                 })
             
             resultado = {
                 'analisis_completado': True,
+                'metodologia_mejorada': {
+                    'enfoque': 'Análisis centrado en mantenimientos correctivos de equipos activos',
+                    'filtros_aplicados': [
+                        'Solo equipos con actividad en últimos 6 meses',
+                        'Prioridad a mantenimientos correctivos vs preventivos',
+                        'Exclusión de equipos en overhaul programado'
+                    ]
+                },
                 'periodo_analizado': {
                     'desde': analysis_df[fecha_col].min().strftime('%Y-%m-%d'),
                     'hasta': analysis_df[fecha_col].max().strftime('%Y-%m-%d'),
-                    'total_registros': len(analysis_df)
+                    'total_registros': len(analysis_df),
+                    'equipos_activos': len(equipos_activos_recientes),
+                    'mantenimientos_correctivos': len(mantenimientos_problematicos),
+                    'mantenimientos_preventivos': len(mantenimientos_preventivos)
                 },
                 'equipos_frecuentes': equipos_frecuentes_resultado,
-                'proyeccion_fallos': proyecciones,
+                'proyeccion_fallos': sorted(proyecciones, key=lambda x: x['probabilidad_fallo_proximo_mes'], reverse=True),
                 'resumen': {
-                    'equipos_analizados': len(frecuencia_promedio),
-                    'equipo_mas_frecuente': equipos_mas_frecuentes.iloc[0][codigo_col] if len(equipos_mas_frecuentes) > 0 else 'N/A',
-                    'mayor_promedio_mensual': round(equipos_mas_frecuentes.iloc[0]['promedio_ingresos_mes'], 2) if len(equipos_mas_frecuentes) > 0 else 0
+                    'equipos_analizados': len(frecuencia_combined),
+                    'equipos_activos_riesgo': len(equipos_riesgo),
+                    'equipo_mayor_riesgo': equipos_riesgo.iloc[0][codigo_col] if len(equipos_riesgo) > 0 else 'N/A',
+                    'mayor_ratio_correctivos': round(equipos_riesgo.iloc[0]['ratio_correctivos'], 2) if len(equipos_riesgo) > 0 else 0
                 }
             }
             
-            print(f"✅ Análisis de frecuencia completado: {len(equipos_frecuentes_resultado)} equipos analizados")
+            print(f"✅ Análisis de frecuencia MEJORADO completado: {len(equipos_frecuentes_resultado)} equipos de riesgo identificados")
             return resultado
             
         except Exception as e:

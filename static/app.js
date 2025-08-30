@@ -395,41 +395,61 @@ const FrequencyAnalysisManager = {
     displayResults: (data) => {
         const container = document.getElementById('frequencyResults');
         
+        const metodologia = data.metodologia_mejorada || {};
+        
         container.innerHTML = `
             <div class="row mb-4">
                 <div class="col-12">
-                    <h4><i class="fas fa-chart-line"></i> Análisis de Frecuencia Mensual</h4>
+                    <h4><i class="fas fa-chart-line"></i> Análisis de Frecuencia Mensual - Metodología Mejorada</h4>
                     <p class="text-muted">
                         Período: ${data.periodo_analizado.desde} - ${data.periodo_analizado.hasta} 
-                        (${data.periodo_analizado.total_registros} registros)
+                        (${data.periodo_analizado.total_registros} registros totales)
                     </p>
+                    ${metodologia.enfoque ? `
+                    <div class="alert alert-success" role="alert">
+                        <i class="fas fa-lightbulb"></i> <strong>Enfoque Mejorado:</strong> ${metodologia.enfoque}
+                        <ul class="mt-2 mb-0">
+                            ${metodologia.filtros_aplicados ? metodologia.filtros_aplicados.map(filtro => `<li>${filtro}</li>`).join('') : ''}
+                        </ul>
+                    </div>
+                    ` : ''}
                 </div>
             </div>
             
             <div class="row mb-4">
-                <div class="col-lg-4">
+                <div class="col-lg-3">
+                    <div class="card border-success">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-success">Equipos Activos</h5>
+                            <h3 class="text-success">${data.periodo_analizado.equipos_activos || 'N/A'}</h3>
+                            <small class="text-muted">Con actividad reciente</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3">
+                    <div class="card border-danger">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-danger">Mant. Correctivos</h5>
+                            <h3 class="text-danger">${data.periodo_analizado.mantenimientos_correctivos || 'N/A'}</h3>
+                            <small class="text-muted">Fallos reales</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3">
                     <div class="card border-primary">
                         <div class="card-body text-center">
-                            <h5 class="card-title text-primary">Equipos Analizados</h5>
-                            <h3 class="text-primary">${data.resumen.equipos_analizados}</h3>
+                            <h5 class="card-title text-primary">Mant. Preventivos</h5>
+                            <h3 class="text-primary">${data.periodo_analizado.mantenimientos_preventivos || 'N/A'}</h3>
+                            <small class="text-muted">Mantenimientos programados</small>
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-4">
+                <div class="col-lg-3">
                     <div class="card border-warning">
                         <div class="card-body text-center">
-                            <h5 class="card-title text-warning">Equipo Más Frecuente</h5>
-                            <h6 class="text-warning">${data.resumen.equipo_mas_frecuente}</h6>
-                            <small class="text-muted">${data.resumen.mayor_promedio_mensual} ingresos/mes</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="card border-info">
-                        <div class="card-body text-center">
-                            <h5 class="card-title text-info">Proyecciones</h5>
-                            <h3 class="text-info">${data.proyeccion_fallos.length}</h3>
-                            <small class="text-muted">equipos en riesgo</small>
+                            <h5 class="card-title text-warning">Equipos en Riesgo</h5>
+                            <h3 class="text-warning">${data.resumen.equipos_activos_riesgo || 0}</h3>
+                            <small class="text-muted">Con probabilidad significativa</small>
                         </div>
                     </div>
                 </div>
@@ -451,8 +471,8 @@ const FrequencyAnalysisManager = {
             <div class="row">
                 <div class="col-lg-6 mb-4">
                     <div class="card">
-                        <div class="card-header bg-primary text-white">
-                            <h5><i class="fas fa-list"></i> Top 10 Equipos Más Frecuentes</h5>
+                        <div class="card-header bg-success text-white">
+                            <h5><i class="fas fa-exclamation-triangle"></i> Equipos Activos con Riesgo Real</h5>
                         </div>
                         <div class="card-body">
                             <div id="frequencyTable" style="height: 400px; overflow-y: auto;"></div>
@@ -462,7 +482,7 @@ const FrequencyAnalysisManager = {
                 <div class="col-lg-6 mb-4">
                     <div class="card">
                         <div class="card-header bg-warning text-white">
-                            <h5><i class="fas fa-exclamation-triangle"></i> Proyección de Fallos Próximo Mes</h5>
+                            <h5><i class="fas fa-calendar-check"></i> Proyección de Fallos Próximo Mes</h5>
                         </div>
                         <div class="card-body">
                             <div id="projectionTable" style="height: 400px; overflow-y: auto;"></div>
@@ -484,49 +504,62 @@ const FrequencyAnalysisManager = {
     // Crear gráfico de frecuencia mensual
     createFrequencyChart: (data, containerId) => {
         const equipos = data.map(item => item.equipo);
-        const promedios = data.map(item => item.promedio_ingresos_mes);
-        const totales = data.map(item => item.total_ingresos);
+        const correctivos = data.map(item => item.promedio_correctivos_mes || 0);
+        const totales = data.map(item => item.promedio_total_mes || 0);
+        const ratios = data.map(item => item.ratio_correctivos || 0);
 
         const trace1 = {
             x: equipos,
-            y: promedios,
+            y: correctivos,
             type: 'bar',
-            name: 'Promedio Mensual',
-            marker: { color: CONFIG.CHART_COLORS.primary },
-            text: promedios.map(p => p.toFixed(1)),
+            name: 'Correctivos/Mes',
+            marker: { color: CONFIG.CHART_COLORS.danger },
+            text: correctivos.map(p => p.toFixed(1)),
             textposition: 'auto',
-            hovertemplate: '<b>%{x}</b><br>Promedio: %{y:.1f} ingresos/mes<extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>Correctivos: %{y:.1f}/mes<extra></extra>'
         };
 
         const trace2 = {
             x: equipos,
             y: totales,
+            type: 'bar',
+            name: 'Total/Mes',
+            marker: { color: CONFIG.CHART_COLORS.primary },
+            text: totales.map(p => p.toFixed(1)),
+            textposition: 'auto',
+            hovertemplate: '<b>%{x}</b><br>Total: %{y:.1f}/mes<extra></extra>'
+        };
+
+        const trace3 = {
+            x: equipos,
+            y: ratios,
             type: 'scatter',
             mode: 'markers',
-            name: 'Total Histórico',
+            name: 'Ratio Correctivos',
             marker: { 
-                color: CONFIG.CHART_COLORS.danger,
-                size: 8,
+                color: CONFIG.CHART_COLORS.warning,
+                size: 10,
                 symbol: 'diamond'
             },
             yaxis: 'y2',
-            hovertemplate: '<b>%{x}</b><br>Total: %{y} ingresos<extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>Ratio: %{y:.1%}<extra></extra>'
         };
 
         const layout = {
-            ...ChartGenerator.getBaseLayout('Frecuencia de Ingresos por Equipo'),
-            xaxis: { title: 'Equipos' },
+            ...ChartGenerator.getBaseLayout('Análisis Mejorado: Correctivos vs Total'),
+            xaxis: { title: 'Equipos Activos' },
             yaxis: { title: 'Promedio Ingresos/Mes' },
             yaxis2: {
-                title: 'Total Histórico',
+                title: 'Ratio Correctivos',
                 overlaying: 'y',
-                side: 'right'
+                side: 'right',
+                tickformat: '.0%'
             },
             barmode: 'group'
         };
 
         const config = { responsive: true, displayModeBar: true };
-        Plotly.newPlot(containerId, [trace1, trace2], layout, config);
+        Plotly.newPlot(containerId, [trace1, trace2, trace3], layout, config);
     },
 
     // Crear gráfico de proyección de riesgo
@@ -582,25 +615,29 @@ const FrequencyAnalysisManager = {
         
         const tableHTML = `
             <table class="table table-sm table-hover">
-                <thead class="table-primary">
+                <thead class="table-success">
                     <tr>
                         <th>Equipo</th>
-                        <th>Prom./Mes</th>
-                        <th>Total</th>
-                        <th>Meses Activos</th>
+                        <th>Correctivos/Mes</th>
+                        <th>Total/Mes</th>
+                        <th>Ratio Correctivos</th>
                         <th>Score Riesgo</th>
-                        <th>Factor Criticidad</th>
+                        <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${data.map(item => `
                         <tr>
                             <td><strong>${item.equipo}</strong></td>
-                            <td><span class="badge bg-primary">${item.promedio_ingresos_mes}</span></td>
-                            <td>${item.total_ingresos}</td>
-                            <td>${item.meses_activos}</td>
-                            <td><span class="badge ${item.score_riesgo >= 5 ? 'bg-danger' : item.score_riesgo >= 3 ? 'bg-warning' : 'bg-success'}">${item.score_riesgo}</span></td>
-                            <td>${item.factor_criticidad}</td>
+                            <td><span class="badge bg-danger">${item.promedio_correctivos_mes || 0}</span></td>
+                            <td><span class="badge bg-primary">${item.promedio_total_mes || 0}</span></td>
+                            <td>
+                                <span class="badge ${(item.ratio_correctivos || 0) >= 0.5 ? 'bg-danger' : (item.ratio_correctivos || 0) >= 0.3 ? 'bg-warning' : 'bg-success'}">
+                                    ${((item.ratio_correctivos || 0) * 100).toFixed(1)}%
+                                </span>
+                            </td>
+                            <td><span class="badge ${item.score_riesgo >= 2 ? 'bg-danger' : item.score_riesgo >= 1 ? 'bg-warning' : 'bg-success'}">${item.score_riesgo}</span></td>
+                            <td><i class="fas fa-check-circle text-success" title="Equipo Activo"></i></td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -621,25 +658,31 @@ const FrequencyAnalysisManager = {
                         <th>Equipo</th>
                         <th>Probabilidad</th>
                         <th>Días Estimados</th>
-                        <th>Tendencia</th>
-                        <th>Estado</th>
+                        <th>Tendencia Correctivos</th>
+                        <th>Tipo Riesgo</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${data.map(item => {
                         const probPercent = (item.probabilidad_fallo_proximo_mes * 100).toFixed(1);
-                        const riskClass = item.probabilidad_fallo_proximo_mes >= 0.7 ? 'danger' : 
-                                         item.probabilidad_fallo_proximo_mes >= 0.4 ? 'warning' : 'success';
-                        const riskIcon = item.probabilidad_fallo_proximo_mes >= 0.7 ? 'fa-exclamation-triangle' : 
-                                        item.probabilidad_fallo_proximo_mes >= 0.4 ? 'fa-exclamation-circle' : 'fa-check-circle';
+                        const riskClass = item.probabilidad_fallo_proximo_mes >= 0.6 ? 'danger' : 
+                                         item.probabilidad_fallo_proximo_mes >= 0.3 ? 'warning' : 'success';
+                        const riskIcon = item.probabilidad_fallo_proximo_mes >= 0.6 ? 'fa-exclamation-triangle' : 
+                                        item.probabilidad_fallo_proximo_mes >= 0.3 ? 'fa-exclamation-circle' : 'fa-check-circle';
+                        
+                        const tipoRiesgo = item.probabilidad_fallo_proximo_mes >= 0.6 ? 'Alto' :
+                                          item.probabilidad_fallo_proximo_mes >= 0.3 ? 'Medio' : 'Bajo';
                         
                         return `
                             <tr>
                                 <td><strong>${item.equipo}</strong></td>
                                 <td><span class="badge bg-${riskClass}">${probPercent}%</span></td>
                                 <td><span class="badge bg-info">${item.dias_estimados_proximo_ingreso} días</span></td>
-                                <td>${item.tendencia_reciente.toFixed(1)}</td>
-                                <td><i class="fas ${riskIcon} text-${riskClass}"></i></td>
+                                <td>${item.tendencia_correctivos_reciente ? item.tendencia_correctivos_reciente.toFixed(1) : 'N/A'}</td>
+                                <td>
+                                    <i class="fas ${riskIcon} text-${riskClass}"></i>
+                                    <small class="text-${riskClass}">${tipoRiesgo}</small>
+                                </td>
                             </tr>
                         `;
                     }).join('')}
