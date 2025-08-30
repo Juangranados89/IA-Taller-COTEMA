@@ -1337,7 +1337,7 @@ def process_uploaded_file(filepath, filename):
         try:
             # Intento 1: Más específico y rápido
             df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', 
-                             engine='openpyxl', nrows=1000)  # máximo 1000 filas
+                             engine='openpyxl', nrows=3000)  # máximo 3000 filas
             logging.info(f"✅ Fast pandas read success. Shape: {df.shape}")
             
         except Exception as e1:
@@ -1349,7 +1349,7 @@ def process_uploaded_file(filepath, filename):
             try:
                 # Intento 2: Menos específico pero con límites
                 df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, 
-                                 engine='openpyxl', nrows=1000)
+                                 engine='openpyxl', nrows=3000)
                 logging.info(f"✅ Pandas read attempt 2 success. Shape: {df.shape}")
                 
             except Exception as e2:
@@ -1360,7 +1360,7 @@ def process_uploaded_file(filepath, filename):
                     
                 try:
                     # Intento 3: Mínimo viable
-                    df = pd.read_excel(filepath, engine='openpyxl', nrows=500)
+                    df = pd.read_excel(filepath, engine='openpyxl', nrows=1500)
                     logging.info(f"✅ Pandas read attempt 3 success. Shape: {df.shape}")
                     
                 except Exception as e3:
@@ -1382,10 +1382,10 @@ def process_uploaded_file(filepath, filename):
             try:
                 df = sanitize_column_names(df)
                 df = df.dropna(how='all')
-                # Limitar a máximo 1000 filas para seguridad
-                if len(df) > 1000:
-                    df = df.head(1000)
-                    logging.info("DataFrame truncated to 1000 rows for memory safety")
+                # Limitar a máximo 3000 filas para seguridad
+                if len(df) > 3000:
+                    df = df.head(3000)
+                    logging.info("DataFrame truncated to 3000 rows for memory safety")
                     
                 logging.info(f"Final DataFrame shape: {df.shape}")
                 
