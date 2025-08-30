@@ -31,6 +31,7 @@ if pd:
         print(f"⚠️ ML libraries not available: {e}")
 
 # Importar motor de ML REAL
+REAL_ML_AVAILABLE = False
 try:
     from src.real_ml_engine import RealCOTEMAMLEngine
     REAL_ML_AVAILABLE = True
@@ -38,12 +39,9 @@ try:
 except ImportError as e:
     REAL_ML_AVAILABLE = False
     print(f"⚠️ Real ML Engine not available: {e}")
-        ML_AVAILABLE = False
-    except Exception as e:
-        print(f"❌ Error loading ML libraries: {e}")
-        ML_AVAILABLE = False
-else:
-    ML_AVAILABLE = False
+except Exception as e:
+    REAL_ML_AVAILABLE = False
+    print(f"❌ Error loading Real ML Engine: {e}")
 
 import traceback
 
