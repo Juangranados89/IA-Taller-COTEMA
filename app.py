@@ -710,37 +710,109 @@ def upload_file():
 
                 df = None
                 error_messages = []
-                logging.info("Attempting to read Excel file...")
+                logging.info("Attempting low-memory openpyxl manual read of Excel file...")
 
-                # Intento 1: El más específico
+                # Primero: intento de lectura manual con openpyxl en modo read_only
                 try:
-                    print("Cargando archivo - Intento 1 (específico: REG, B:Y, skip 4)")
-                    df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', engine='openpyxl')
-                    print("✅ Éxito en Intento 1")
-                except Exception as e1:
-                    error_messages.append(f"Intento 1 fallido: {e1}")
-                    
-                    # Intento 2: Menos específico
+                    import openpyxl
+                    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+                    sheet_name = 'REG' if 'REG' in wb.sheetnames else wb.sheetnames[0]
+                    ws = wb[sheet_name]
+
+                    header_row_idx = 5  # B5:Y5 es la fila de encabezados según especificación
+                    start_col = 2  # columna B
+                    end_col = 25   # columna Y
+
+                    # Leer encabezados
+                    headers = []
+                    for col in range(start_col, end_col + 1):
+                        val = ws.cell(row=header_row_idx, column=col).value
+                        headers.append(val if val is not None else f'col_{col}')
+
+                    # Leer filas a partir de la fila siguiente al encabezado
+                    data_rows = []
+                    row_idx = header_row_idx + 1
+                    empty_streak = 0
+                    max_empty_streak = 5
+                    max_rows_guard = 200000  # seguridad para evitar loops infinitos
+                    rows_read = 0
+
+                    while rows_read < max_rows_guard:
+                        row_vals = []
+                        all_none = True
+                        for col in range(start_col, end_col + 1):
+                            cell_val = ws.cell(row=row_idx, column=col).value
+                            row_vals.append(cell_val)
+                            if cell_val not in (None, '', ' '):
+                                all_none = False
+
+                        if all_none:
+                            empty_streak += 1
+                            if empty_streak >= max_empty_streak:
+                                break
+                            row_idx += 1
+                            rows_read += 1
+                            continue
+
+                        empty_streak = 0
+                        data_rows.append(dict(zip(headers, row_vals)))
+                        row_idx += 1
+                        rows_read += 1
+
                     try:
-                        print("Cargando archivo - Intento 2 (semi-específico: REG, skip 4)")
-                        df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, engine='openpyxl')
-                        print("✅ Éxito en Intento 2")
-                    except Exception as e2:
-                        error_messages.append(f"Intento 2 fallido: {e2}")
-                        
-                        # Intento 3: Genérico
+                        wb.close()
+                    except Exception:
+                        pass
+
+                    if len(data_rows) > 0:
+                        df = pd.DataFrame(data_rows)
+                        logging.info(f"Openpyxl manual read produced DataFrame with shape: {df.shape}")
+                    else:
+                        error_messages.append("Openpyxl manual read returned no rows.")
+
+                except Exception as e_manual:
+                    error_messages.append(f"Manual openpyxl read failed: {e_manual}")
+                    logging.warning(f"Manual openpyxl read failed: {e_manual}")
+
+                # Si la lectura manual no produjo un DataFrame, intentar con pandas (fallback)
+                if df is None:
+                    logging.info("Falling back to pandas.read_excel attempts using engine=openpyxl...")
+                    try:
+                        # Intento 1: El más específico
                         try:
-                            print("Cargando archivo - Intento 3 (genérico)")
-                            df = pd.read_excel(filepath, engine='openpyxl')
-                            print("✅ Éxito en Intento 3")
-                        except Exception as e3:
-                            error_messages.append(f"Intento 3 fallido: {e3}")
-                            # Todos los intentos fallaron
-                            final_error = f"No se pudo leer el archivo Excel después de 3 intentos. Errores: {'; '.join(error_messages)}"
-                            print(f"❌ {final_error}")
-                            set_progress_error(final_error)
-                            return jsonify({'error': final_error}), 500
-                
+                            logging.info("pandas attempt 1: sheet='REG', skiprows=4, usecols='B:Y'")
+                            df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', engine='openpyxl')
+                            logging.info("✅ pandas attempt 1 success")
+                        except Exception as e1:
+                            error_messages.append(f"Intento 1 fallido: {e1}")
+                            logging.warning(f"pandas attempt1 failed: {e1}")
+                            # Intento 2: Menos específico
+                            try:
+                                logging.info("pandas attempt 2: sheet='REG', skiprows=4")
+                                df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, engine='openpyxl')
+                                logging.info("✅ pandas attempt 2 success")
+                            except Exception as e2:
+                                error_messages.append(f"Intento 2 fallido: {e2}")
+                                logging.warning(f"pandas attempt2 failed: {e2}")
+                                # Intento 3: Genérico
+                                try:
+                                    logging.info("pandas attempt 3: generic read")
+                                    df = pd.read_excel(filepath, engine='openpyxl')
+                                    logging.info("✅ pandas attempt 3 success")
+                                except Exception as e3:
+                                    error_messages.append(f"Intento 3 fallido: {e3}")
+                                    logging.error(f"All pandas attempts failed: {e3}")
+                                    final_error = f"No se pudo leer el archivo Excel después de intentos. Errores: {'; '.join(error_messages)}"
+                                    logging.error(final_error)
+                                    set_progress_error(final_error)
+                                    return jsonify({'error': final_error}), 500
+                    except Exception as e_read:
+                        error_messages.append(f"Pandas fallback failed: {e_read}")
+                        final_error = f"No se pudo leer el archivo Excel. Errores: {'; '.join(error_messages)}"
+                        logging.error(final_error)
+                        set_progress_error(final_error)
+                        return jsonify({'error': final_error}), 500
+
                 logging.info(f"Excel file read successfully. Shape: {df.shape if df is not None else 'None'}")
 
                 # ESTANDARIZAR NOMBRES DE COLUMNAS
