@@ -35,8 +35,10 @@ if pd:
 else:
     ML_AVAILABLE = False
 
+import traceback
+
 # Configuración de logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Inicialización de la aplicación Flask
 app = Flask(__name__)
@@ -894,28 +896,61 @@ def deep_analysis():
 
 @app.route('/dashboard')
 def dashboard():
-    # Verificación más robusta de los datos
-    if (global_data['df'] is None or 
-        not hasattr(global_data['df'], 'columns') or 
-        len(global_data['df']) == 0):
-        flash('Primero debes cargar un archivo Excel', 'warning')
-        return redirect(url_for('index'))
-    
-    months = [
-        '2025-09', '2025-08', '2025-07', '2025-06', '2025-05', '2025-04',
-        '2024-12', '2024-11', '2024-10', '2024-09', '2024-08', '2024-07',
-        '2023-12', '2023-11', '2023-10', '2023-09', '2023-08', '2023-07'
-    ]
-    
-    stats = global_data.get('stats', {})
-    
-    return render_template('dashboard_simple.html', 
-                         months=months,
-                         stats=stats,  # Pasar stats completo al template
-                         total_registros=stats.get('total_registros', 0),
-                         equipos_unicos=stats.get('equipos_unicos', 0),
-                         ml_available=ML_AVAILABLE,
-                         ml_models_trained=global_data.get('ml_models_trained', False))
+    """
+    Renderiza el dashboard principal después de que se ha cargado un archivo.
+    Esta función ahora está protegida contra errores para evitar que el servidor se caiga.
+    """
+    try:
+        logging.info("Attempting to render /dashboard")
+        
+        # Verificación más robusta de los datos
+        if global_data.get('df') is None:
+            logging.warning("No DataFrame found in global_data, redirecting to index.")
+            flash('Primero debes cargar un archivo Excel.', 'warning')
+            return redirect(url_for('index'))
+
+        df = global_data['df']
+        logging.info(f"DataFrame loaded with {len(df)} rows and columns: {list(df.columns)}")
+
+        # --- Cálculo de meses para el selector (punto común de error) ---
+        # Asumimos que la columna de fecha se llama 'fecha_ingreso' después de la estandarización
+        date_column = 'fecha_ingreso' # Reemplaza con el nombre estandarizado real de tu columna de fecha
+        months = []
+        if date_column in df.columns:
+            # Convertir a datetime, forzando errores a NaT (Not a Time)
+            valid_dates = pd.to_datetime(df[date_column], errors='coerce').dropna()
+            if not valid_dates.empty:
+                months = sorted(valid_dates.dt.to_period('M').astype(str).unique().tolist(), reverse=True)
+                logging.info(f"Successfully generated months for selector: {months}")
+            else:
+                logging.warning(f"Column '{date_column}' exists but contains no valid dates.")
+        else:
+            logging.error(f"Critical: Date column '{date_column}' not found in DataFrame. Available columns: {list(df.columns)}")
+            # Fallback: si no hay columna de fecha, usar una lista genérica
+            months = ['2025-08', '2025-07', '2025-06']
+
+
+        # Obtener el resto de los datos para la plantilla
+        stats = global_data.get('stats', {'needs_analysis': True})
+        ml_models_trained = global_data.get('ml_models_trained', False)
+
+        logging.info("Successfully prepared all data for dashboard template.")
+        return render_template(
+            'dashboard_simple.html',
+            months=months,
+            stats=stats,
+            total_registros=stats.get('total_registros', 0),
+            equipos_unicos=stats.get('equipos_unicos', 0),
+            ml_available=ML_AVAILABLE,
+            ml_models_trained=ml_models_trained
+        )
+
+    except Exception as e:
+        # Si algo falla, se registrará el error completo y se mostrará una página de error.
+        error_trace = traceback.format_exc()
+        logging.error(f"CRITICAL ERROR RENDERING DASHBOARD: {e}\n{error_trace}")
+        # Devolver una página de error simple para no colgar el navegador
+        return "<h1>Error 500: Internal Server Error</h1><p>Ocurrió un error crítico al intentar cargar el dashboard. Por favor, revise los logs del servidor para más detalles.</p>", 500
 
 @app.route('/kpis/<mes>')
 def calculate_kpis(mes):
