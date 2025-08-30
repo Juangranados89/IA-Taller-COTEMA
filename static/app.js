@@ -218,6 +218,11 @@ const APIClient = {
     // Exportar datos
     exportData: async (format) => {
         return await APIClient.request(`/api/export/${format}`);
+    },
+
+    // Análisis de frecuencia mensual
+    getFrequencyAnalysis: async () => {
+        return await APIClient.request('/api/frequency-analysis');
     }
 };
 
@@ -357,6 +362,292 @@ const ChartGenerator = {
 
         const config = { responsive: true, displayModeBar: true };
         Plotly.newPlot(containerId, [trace], layout, config);
+    }
+};
+
+// Manejador de análisis de frecuencia
+const FrequencyAnalysisManager = {
+    currentData: null,
+
+    // Ejecutar análisis de frecuencia
+    analyze: async () => {
+        try {
+            Utils.showLoading('frequencyResults', 'Analizando frecuencia de equipos...');
+            
+            const response = await APIClient.getFrequencyAnalysis();
+            
+            if (!response.success) {
+                throw new Error(response.error);
+            }
+            
+            FrequencyAnalysisManager.currentData = response.data;
+            FrequencyAnalysisManager.displayResults(response.data);
+            
+            Utils.showNotification('Análisis de frecuencia completado exitosamente', 'success');
+            
+        } catch (error) {
+            Utils.showError('frequencyResults', error.message);
+            Utils.showNotification(`Error: ${error.message}`, 'error');
+        }
+    },
+
+    // Mostrar resultados del análisis
+    displayResults: (data) => {
+        const container = document.getElementById('frequencyResults');
+        
+        container.innerHTML = `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4><i class="fas fa-chart-line"></i> Análisis de Frecuencia Mensual</h4>
+                    <p class="text-muted">
+                        Período: ${data.periodo_analizado.desde} - ${data.periodo_analizado.hasta} 
+                        (${data.periodo_analizado.total_registros} registros)
+                    </p>
+                </div>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-lg-4">
+                    <div class="card border-primary">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-primary">Equipos Analizados</h5>
+                            <h3 class="text-primary">${data.resumen.equipos_analizados}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card border-warning">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-warning">Equipo Más Frecuente</h5>
+                            <h6 class="text-warning">${data.resumen.equipo_mas_frecuente}</h6>
+                            <small class="text-muted">${data.resumen.mayor_promedio_mensual} ingresos/mes</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card border-info">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-info">Proyecciones</h5>
+                            <h3 class="text-info">${data.proyeccion_fallos.length}</h3>
+                            <small class="text-muted">equipos en riesgo</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="plot-container">
+                        <div id="frequencyChart"></div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="plot-container">
+                        <div id="riskProjectionChart"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5><i class="fas fa-list"></i> Top 10 Equipos Más Frecuentes</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="frequencyTable" style="height: 400px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-warning text-white">
+                            <h5><i class="fas fa-exclamation-triangle"></i> Proyección de Fallos Próximo Mes</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="projectionTable" style="height: 400px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Generar gráficos y tablas
+        setTimeout(() => {
+            FrequencyAnalysisManager.createFrequencyChart(data.equipos_frecuentes, 'frequencyChart');
+            FrequencyAnalysisManager.createRiskProjectionChart(data.proyeccion_fallos, 'riskProjectionChart');
+            FrequencyAnalysisManager.createFrequencyTable(data.equipos_frecuentes, 'frequencyTable');
+            FrequencyAnalysisManager.createProjectionTable(data.proyeccion_fallos, 'projectionTable');
+        }, 100);
+    },
+
+    // Crear gráfico de frecuencia mensual
+    createFrequencyChart: (data, containerId) => {
+        const equipos = data.map(item => item.equipo);
+        const promedios = data.map(item => item.promedio_ingresos_mes);
+        const totales = data.map(item => item.total_ingresos);
+
+        const trace1 = {
+            x: equipos,
+            y: promedios,
+            type: 'bar',
+            name: 'Promedio Mensual',
+            marker: { color: CONFIG.CHART_COLORS.primary },
+            text: promedios.map(p => p.toFixed(1)),
+            textposition: 'auto',
+            hovertemplate: '<b>%{x}</b><br>Promedio: %{y:.1f} ingresos/mes<extra></extra>'
+        };
+
+        const trace2 = {
+            x: equipos,
+            y: totales,
+            type: 'scatter',
+            mode: 'markers',
+            name: 'Total Histórico',
+            marker: { 
+                color: CONFIG.CHART_COLORS.danger,
+                size: 8,
+                symbol: 'diamond'
+            },
+            yaxis: 'y2',
+            hovertemplate: '<b>%{x}</b><br>Total: %{y} ingresos<extra></extra>'
+        };
+
+        const layout = {
+            ...ChartGenerator.getBaseLayout('Frecuencia de Ingresos por Equipo'),
+            xaxis: { title: 'Equipos' },
+            yaxis: { title: 'Promedio Ingresos/Mes' },
+            yaxis2: {
+                title: 'Total Histórico',
+                overlaying: 'y',
+                side: 'right'
+            },
+            barmode: 'group'
+        };
+
+        const config = { responsive: true, displayModeBar: true };
+        Plotly.newPlot(containerId, [trace1, trace2], layout, config);
+    },
+
+    // Crear gráfico de proyección de riesgo
+    createRiskProjectionChart: (data, containerId) => {
+        const equipos = data.map(item => item.equipo);
+        const probabilidades = data.map(item => item.probabilidad_fallo_proximo_mes);
+        const dias_estimados = data.map(item => item.dias_estimados_proximo_ingreso);
+
+        const colors = probabilidades.map(prob => {
+            if (prob >= 0.7) return CONFIG.CHART_COLORS.danger;
+            if (prob >= 0.4) return CONFIG.CHART_COLORS.warning;
+            return CONFIG.CHART_COLORS.success;
+        });
+
+        const trace = {
+            x: equipos,
+            y: probabilidades,
+            type: 'bar',
+            marker: { color: colors },
+            text: probabilidades.map(p => `${(p * 100).toFixed(1)}%`),
+            textposition: 'auto',
+            hovertemplate: '<b>%{x}</b><br>Probabilidad: %{y:.1%}<br>Días estimados: ' + 
+                          dias_estimados.map(d => d).join(',').split(',').map((d, i) => i === equipos.indexOf('%{x}') ? d : '').filter(Boolean)[0] + '<extra></extra>'
+        };
+
+        const layout = {
+            ...ChartGenerator.getBaseLayout('Probabilidad de Fallo Próximo Mes'),
+            xaxis: { title: 'Equipos' },
+            yaxis: { title: 'Probabilidad', tickformat: '.0%' },
+            shapes: [
+                { 
+                    type: 'line', x0: 0, x1: 1, xref: 'paper', 
+                    y0: 0.7, y1: 0.7, 
+                    line: { color: CONFIG.CHART_COLORS.danger, dash: 'dash' },
+                    annotation: { text: 'Alto Riesgo (70%)', x: 0.02, y: 0.72 }
+                },
+                { 
+                    type: 'line', x0: 0, x1: 1, xref: 'paper', 
+                    y0: 0.4, y1: 0.4, 
+                    line: { color: CONFIG.CHART_COLORS.warning, dash: 'dash' },
+                    annotation: { text: 'Riesgo Medio (40%)', x: 0.02, y: 0.42 }
+                }
+            ]
+        };
+
+        const config = { responsive: true, displayModeBar: true };
+        Plotly.newPlot(containerId, [trace], layout, config);
+    },
+
+    // Crear tabla de frecuencia
+    createFrequencyTable: (data, containerId) => {
+        const container = document.getElementById(containerId);
+        
+        const tableHTML = `
+            <table class="table table-sm table-hover">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Equipo</th>
+                        <th>Prom./Mes</th>
+                        <th>Total</th>
+                        <th>Meses Activos</th>
+                        <th>Score Riesgo</th>
+                        <th>Factor Criticidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(item => `
+                        <tr>
+                            <td><strong>${item.equipo}</strong></td>
+                            <td><span class="badge bg-primary">${item.promedio_ingresos_mes}</span></td>
+                            <td>${item.total_ingresos}</td>
+                            <td>${item.meses_activos}</td>
+                            <td><span class="badge ${item.score_riesgo >= 5 ? 'bg-danger' : item.score_riesgo >= 3 ? 'bg-warning' : 'bg-success'}">${item.score_riesgo}</span></td>
+                            <td>${item.factor_criticidad}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        container.innerHTML = tableHTML;
+    },
+
+    // Crear tabla de proyección
+    createProjectionTable: (data, containerId) => {
+        const container = document.getElementById(containerId);
+        
+        const tableHTML = `
+            <table class="table table-sm table-hover">
+                <thead class="table-warning">
+                    <tr>
+                        <th>Equipo</th>
+                        <th>Probabilidad</th>
+                        <th>Días Estimados</th>
+                        <th>Tendencia</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(item => {
+                        const probPercent = (item.probabilidad_fallo_proximo_mes * 100).toFixed(1);
+                        const riskClass = item.probabilidad_fallo_proximo_mes >= 0.7 ? 'danger' : 
+                                         item.probabilidad_fallo_proximo_mes >= 0.4 ? 'warning' : 'success';
+                        const riskIcon = item.probabilidad_fallo_proximo_mes >= 0.7 ? 'fa-exclamation-triangle' : 
+                                        item.probabilidad_fallo_proximo_mes >= 0.4 ? 'fa-exclamation-circle' : 'fa-check-circle';
+                        
+                        return `
+                            <tr>
+                                <td><strong>${item.equipo}</strong></td>
+                                <td><span class="badge bg-${riskClass}">${probPercent}%</span></td>
+                                <td><span class="badge bg-info">${item.dias_estimados_proximo_ingreso} días</span></td>
+                                <td>${item.tendencia_reciente.toFixed(1)}</td>
+                                <td><i class="fas ${riskIcon} text-${riskClass}"></i></td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        container.innerHTML = tableHTML;
     }
 };
 
@@ -597,6 +888,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // Función global para análisis de frecuencia (llamada desde el HTML)
+    window.analyzeFrequency = function() {
+        FrequencyAnalysisManager.analyze();
+    };
+
     // Test de conexión inicial
     APIClient.connectionTest()
         .then(data => {
@@ -612,3 +908,4 @@ window.Utils = Utils;
 window.APIClient = APIClient;
 window.ChartGenerator = ChartGenerator;
 window.KPIManager = KPIManager;
+window.FrequencyAnalysisManager = FrequencyAnalysisManager;

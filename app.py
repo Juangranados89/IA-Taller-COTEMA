@@ -510,6 +510,206 @@ class COTEMAMLEngine:
         """Método de entrenamiento básico (fallback)"""
         return self.train_models_enhanced(df)
     
+    def analyze_equipment_monthly_frequency(self, df=None):
+        """Analiza equipos con más ingresos por mes y proyecta fallos para el próximo mes"""
+        try:
+            # Usar datos globales o datos pasados como parámetro
+            if df is None:
+                df = global_data.get('df')
+            
+            if df is None or len(df) == 0:
+                return {
+                    'error': 'No hay datos disponibles para análisis de frecuencia',
+                    'equipos_frecuentes': [],
+                    'proyeccion_fallos': []
+                }
+            
+            # Preparar los datos
+            analysis_df = df.copy()
+            
+            # Buscar columnas necesarias
+            codigo_col = None
+            fecha_col = None
+            tipo_atencion_col = None
+            
+            # Detectar columna de código
+            for col in analysis_df.columns:
+                col_name = str(col).lower()
+                if any(keyword in col_name for keyword in ['codigo', 'equipo']):
+                    codigo_col = col
+                    break
+            
+            # Detectar columna de fecha de ingreso
+            for col in analysis_df.columns:
+                col_name = str(col).lower()
+                if 'fecha_in' in col_name or ('fecha' in col_name and 'in' in col_name):
+                    fecha_col = col
+                    break
+            
+            # Detectar tipo de atención
+            for col in analysis_df.columns:
+                col_name = str(col).lower()
+                if 'tipo_atencion' in col_name or 'atencion' in col_name:
+                    tipo_atencion_col = col
+                    break
+            
+            if not codigo_col or not fecha_col:
+                return {
+                    'error': 'No se encontraron columnas necesarias (código de equipo y fecha)',
+                    'equipos_frecuentes': [],
+                    'proyeccion_fallos': []
+                }
+            
+            # Convertir fechas
+            analysis_df[fecha_col] = pd.to_datetime(analysis_df[fecha_col], errors='coerce')
+            analysis_df = analysis_df.dropna(subset=[fecha_col, codigo_col])
+            
+            # Extraer mes y año
+            analysis_df['mes'] = analysis_df[fecha_col].dt.month
+            analysis_df['año'] = analysis_df[fecha_col].dt.year
+            analysis_df['mes_año'] = analysis_df[fecha_col].dt.to_period('M')
+            
+            # 1. ANÁLISIS DE FRECUENCIA MENSUAL
+            frecuencia_mensual = analysis_df.groupby([codigo_col, 'mes_año']).size().reset_index(name='ingresos_mes')
+            
+            # Promedios por equipo
+            frecuencia_promedio = frecuencia_mensual.groupby(codigo_col).agg({
+                'ingresos_mes': ['mean', 'sum', 'count', 'std']
+            }).round(2)
+            
+            frecuencia_promedio.columns = ['promedio_ingresos_mes', 'total_ingresos', 'meses_activos', 'desviacion_std']
+            frecuencia_promedio = frecuencia_promedio.reset_index()
+            frecuencia_promedio['desviacion_std'] = frecuencia_promedio['desviacion_std'].fillna(0)
+            
+            # Calcular score de riesgo
+            frecuencia_promedio['score_riesgo'] = (
+                frecuencia_promedio['promedio_ingresos_mes'] * 0.4 +
+                frecuencia_promedio['desviacion_std'] * 0.3 +
+                (frecuencia_promedio['total_ingresos'] / frecuencia_promedio['meses_activos']) * 0.3
+            )
+            
+            # 2. ANÁLISIS POR TIPO DE ATENCIÓN (si está disponible)
+            if tipo_atencion_col:
+                tipo_atencion_stats = analysis_df.groupby([codigo_col, tipo_atencion_col]).size().unstack(fill_value=0)
+                
+                # Calcular peso de criticidad
+                pesos_criticidad = {
+                    'CORRECTIVA': 3.0,
+                    'ALISTAMIENTO-TC': 2.0,
+                    'PREVENTIVA': 1.0
+                }
+                
+                for equipo_idx in frecuencia_promedio.index:
+                    equipo = frecuencia_promedio.loc[equipo_idx, codigo_col]
+                    if equipo in tipo_atencion_stats.index:
+                        peso_total = 0
+                        for tipo_atencion, peso in pesos_criticidad.items():
+                            if tipo_atencion in tipo_atencion_stats.columns:
+                                count = tipo_atencion_stats.loc[equipo, tipo_atencion]
+                                peso_total += count * peso
+                        
+                        frecuencia_promedio.loc[equipo_idx, 'factor_criticidad'] = peso_total / frecuencia_promedio.loc[equipo_idx, 'total_ingresos']
+                    else:
+                        frecuencia_promedio.loc[equipo_idx, 'factor_criticidad'] = 1.5  # valor medio
+            else:
+                frecuencia_promedio['factor_criticidad'] = 1.5
+            
+            # Recalcular score de riesgo incluyendo criticidad
+            frecuencia_promedio['score_riesgo_final'] = (
+                frecuencia_promedio['score_riesgo'] * 0.6 +
+                frecuencia_promedio['factor_criticidad'] * 0.4
+            )
+            
+            # Ordenar por score de riesgo
+            equipos_mas_frecuentes = frecuencia_promedio.sort_values('score_riesgo_final', ascending=False).head(10)
+            
+            # 3. PROYECCIÓN PARA EL PRÓXIMO MES
+            fecha_actual = datetime.now()
+            proximo_mes = fecha_actual + timedelta(days=30)
+            
+            proyecciones = []
+            for _, equipo_row in equipos_mas_frecuentes.iterrows():
+                equipo = equipo_row[codigo_col]
+                
+                # Probabilidad basada en frecuencia histórica
+                prob_base = min(0.85, equipo_row['promedio_ingresos_mes'] / 5.0)
+                
+                # Ajuste por criticidad
+                prob_ajustada = prob_base * (1 + equipo_row['factor_criticidad'] / 10)
+                prob_ajustada = min(0.95, prob_ajustada)
+                
+                # Tendencia reciente (últimos 3 meses)
+                try:
+                    datos_recientes = analysis_df[
+                        (analysis_df[codigo_col] == equipo) & 
+                        (analysis_df[fecha_col] >= fecha_actual - timedelta(days=90))
+                    ]
+                    tendencia = len(datos_recientes) / 3.0  # promedio últimos 3 meses
+                    if tendencia > equipo_row['promedio_ingresos_mes']:
+                        prob_ajustada *= 1.2  # aumentar si tendencia es creciente
+                except:
+                    tendencia = equipo_row['promedio_ingresos_mes']
+                
+                # Días estimados hasta próximo ingreso
+                if equipo_row['promedio_ingresos_mes'] > 0:
+                    dias_promedio_entre_ingresos = 30 / equipo_row['promedio_ingresos_mes']
+                    dias_estimados = max(1, int(dias_promedio_entre_ingresos))
+                else:
+                    dias_estimados = 60
+                
+                proyecciones.append({
+                    'equipo': equipo,
+                    'probabilidad_fallo_proximo_mes': round(min(0.95, prob_ajustada), 3),
+                    'promedio_ingresos_mensual': round(equipo_row['promedio_ingresos_mes'], 2),
+                    'total_ingresos_historicos': int(equipo_row['total_ingresos']),
+                    'score_riesgo': round(equipo_row['score_riesgo_final'], 2),
+                    'factor_criticidad': round(equipo_row['factor_criticidad'], 2),
+                    'dias_estimados_proximo_ingreso': dias_estimados,
+                    'tendencia_reciente': round(tendencia, 2)
+                })
+            
+            # Preparar resultado final
+            equipos_frecuentes_resultado = []
+            for _, row in equipos_mas_frecuentes.iterrows():
+                equipos_frecuentes_resultado.append({
+                    'equipo': row[codigo_col],
+                    'promedio_ingresos_mes': round(row['promedio_ingresos_mes'], 2),
+                    'total_ingresos': int(row['total_ingresos']),
+                    'meses_activos': int(row['meses_activos']),
+                    'desviacion_std': round(row['desviacion_std'], 2),
+                    'factor_criticidad': round(row['factor_criticidad'], 2),
+                    'score_riesgo': round(row['score_riesgo_final'], 2)
+                })
+            
+            resultado = {
+                'analisis_completado': True,
+                'periodo_analizado': {
+                    'desde': analysis_df[fecha_col].min().strftime('%Y-%m-%d'),
+                    'hasta': analysis_df[fecha_col].max().strftime('%Y-%m-%d'),
+                    'total_registros': len(analysis_df)
+                },
+                'equipos_frecuentes': equipos_frecuentes_resultado,
+                'proyeccion_fallos': proyecciones,
+                'resumen': {
+                    'equipos_analizados': len(frecuencia_promedio),
+                    'equipo_mas_frecuente': equipos_mas_frecuentes.iloc[0][codigo_col] if len(equipos_mas_frecuentes) > 0 else 'N/A',
+                    'mayor_promedio_mensual': round(equipos_mas_frecuentes.iloc[0]['promedio_ingresos_mes'], 2) if len(equipos_mas_frecuentes) > 0 else 0
+                }
+            }
+            
+            print(f"✅ Análisis de frecuencia completado: {len(equipos_frecuentes_resultado)} equipos analizados")
+            return resultado
+            
+        except Exception as e:
+            print(f"❌ Error en análisis de frecuencia: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'error': f'Error durante el análisis: {str(e)}',
+                'equipos_frecuentes': [],
+                'proyeccion_fallos': []
+            }
+
     def predict_equipment(self, equipo_data):
         """Realiza predicciones avanzadas para un equipo específico basado en datos reales del taller"""
         if not self.is_trained:
@@ -1562,6 +1762,41 @@ def get_equipment_codes():
             'success': False,
             'error': str(e),
             'codes': []
+        })
+
+@app.route('/api/frequency-analysis')
+def frequency_analysis():
+    """API endpoint para análisis de frecuencia mensual de equipos y proyección de fallos"""
+    try:
+        # Verificar que hay datos cargados
+        if global_data['df'] is None:
+            return jsonify({
+                'success': False,
+                'error': 'No hay datos cargados. Primero carga un archivo Excel.',
+                'data': None
+            })
+        
+        # Ejecutar análisis de frecuencia
+        result = ml_engine.analyze_equipment_monthly_frequency()
+        
+        if 'error' in result:
+            return jsonify({
+                'success': False,
+                'error': result['error'],
+                'data': None
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': result,
+            'message': 'Análisis de frecuencia completado exitosamente'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error ejecutando análisis de frecuencia: {str(e)}',
+            'data': None
         })
 
 @app.route('/api/progress')
