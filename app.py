@@ -1,15 +1,6 @@
 # ...existing code...
 # (Buscar la inicialización de la app Flask)
 # Inicialización de la aplicación Flask
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
-# ...existing code...
-
-# Endpoint para consultar el progreso de carga/procesamiento
-@app.route('/progress', methods=['GET'])
-def get_progress():
-    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
-    return jsonify(progress_state)
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from datetime import datetime, timedelta
 import os
@@ -26,7 +17,7 @@ try:
     import pandas as pd
 except ImportError:
     pd = None
-    print("❌ CRITICAL ERROR: Pandas library not found. The application cannot process files.")
+    print("\u274c CRITICAL ERROR: Pandas library not found. The application cannot process files.")
 
 ML_AVAILABLE = False
 if pd:
@@ -38,29 +29,35 @@ if pd:
         import plotly.graph_objects as go
         from plotly.utils import PlotlyJSONEncoder
         ML_AVAILABLE = True
-        print("✅ ML libraries loaded successfully")
+        print("\u2705 ML libraries loaded successfully")
     except ImportError as e:
-        print(f"⚠️ ML libraries not available: {e}")
+        print(f"\u26a0\ufe0f ML libraries not available: {e}")
 
 # Importar motor de ML REAL
 REAL_ML_AVAILABLE = False
 try:
     from src.real_ml_engine import RealCOTEMAMLEngine
     REAL_ML_AVAILABLE = True
-    print("✅ Real ML Engine loaded successfully")
+    print("\u2705 Real ML Engine loaded successfully")
 except ImportError as e:
     REAL_ML_AVAILABLE = False
-    print(f"⚠️ Real ML Engine not available: {e}")
+    print(f"\u26a0\ufe0f Real ML Engine not available: {e}")
 except Exception as e:
     REAL_ML_AVAILABLE = False
-    print(f"❌ Error loading Real ML Engine: {e}")
+    print(f"\u274c Error loading Real ML Engine: {e}")
 
 import traceback
 
-# Configuración de logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 # Inicialización de la aplicación Flask
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+# Endpoint para consultar el progreso de carga/procesamiento
+@app.route('/progress', methods=['GET'])
+def get_progress():
+    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
+    return jsonify(progress_state)
+# Configuración de logging
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
