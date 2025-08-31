@@ -406,7 +406,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="reloadForm">
                     <div class="mb-3">
                         <label for="newFile" class="form-label">Seleccionar nuevo archivo:</label>
                         <input type="file" class="form-control" id="newFile" name="file" accept=".xlsx,.xls" required>
@@ -427,7 +427,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 COTEMA Analytics - DOM loaded');
     
@@ -487,6 +486,57 @@ document.addEventListener('DOMContentLoaded', function() {
             showError('Error de conexión: ' + error.message);
         });
     });
+
+    // Lógica para el formulario de recarga (modal)
+    const reloadForm = document.getElementById('reloadForm');
+    if (reloadForm) {
+        reloadForm.addEventListener('submit', function(e) {
+            const fileInput = document.getElementById('newFile');
+            if (fileInput.files.length === 0) {
+                e.preventDefault();
+                Utils.showNotification('Por favor selecciona un archivo', 'warning');
+                return;
+            }
+            const validation = Utils.validateExcelFile(fileInput.files[0]);
+            if (!validation.valid) {
+                e.preventDefault();
+                Utils.showNotification(validation.error, 'error');
+                return;
+            }
+            // Mostrar modal de progreso
+            showProgressModal();
+            // Iniciar monitoreo de progreso
+            startProgressMonitoring();
+            // Enviar archivo
+            e.preventDefault();
+            const formData = new FormData(this);
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return response.json();
+                } else {
+                    return response.text().then(text => {
+                        throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
+                    });
+                }
+            })
+            .then(data => {
+                if (data.success) {
+                    showSuccessCompletion(data);
+                } else {
+                    showError(data.error || 'Error desconocido en el procesamiento');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Error de conexión: ' + error.message);
+            });
+        });
+    }
     
     let progressInterval;
     
@@ -635,7 +685,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/dashboard';
     }
     
-    function showUploadForm() {
+    window.showUploadForm = function() {
         const modal = new bootstrap.Modal(document.getElementById('reloadUploadForm'));
         modal.show();
     }
