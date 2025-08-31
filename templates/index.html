@@ -427,6 +427,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 COTEMA Analytics - DOM loaded');
     
@@ -444,56 +445,79 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Manejar envío del formulario de upload
-    uploadForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        console.log('📤 Form submitted, starting upload process...');
-        
-        const formData = new FormData(this);
-        
-        // Mostrar modal de progreso
-        showProgressModal();
-        
-        // Iniciar monitoreo de progreso
-        startProgressMonitoring();
-        
-        // Enviar archivo
-        fetch('/upload', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            // Verificar si la respuesta es JSON antes de parsear
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.indexOf("application/json") !== -1) {
-                return response.json();
-            } else {
-                // Si no es JSON, es un error HTML (como el 500 Internal Server Error)
-                return response.text().then(text => {
-                    throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
-                });
-            }
-        })
-        .then(data => {
-            if (data.success) {
-                showSuccessCompletion(data);
-            } else {
-                showError(data.error || 'Error desconocido en el procesamiento');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showError('Error de conexión: ' + error.message);
+    // Solo manejar el formulario si no ha sido mejorado por app.js
+    if (!uploadForm.hasAttribute('data-upload-enhanced')) {
+        uploadForm.setAttribute('data-upload-enhanced', 'true');
+        // Manejar envío del formulario de upload
+        uploadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            console.log('📤 Form submitted, starting upload process...');
+            
+            const formData = new FormData(this);
+            
+            // Mostrar modal de progreso
+            showProgressModal();
+            
+            // Iniciar monitoreo de progreso
+            startProgressMonitoring();
+            
+            // Enviar archivo
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers.get("content-type"));
+                
+                // Verificar si la respuesta es JSON antes de parsear
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return response.json();
+                } else {
+                    // Si no es JSON, capturar el texto de error HTML
+                    return response.text().then(text => {
+                        console.error('Server returned HTML instead of JSON:', text);
+                        if (response.status >= 500) {
+                            throw new Error("Error interno del servidor (500). Revisar logs del servidor.");
+                        } else if (response.status >= 400) {
+                            throw new Error(`Error del cliente (${response.status}). Verificar datos enviados.`);
+                        } else {
+                            throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
+                        }
+                    });
+                }
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    showSuccessCompletion(data);
+                } else {
+                    showError(data.error || 'Error desconocido en el procesamiento');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Error de conexión: ' + error.message);
+            });
         });
-    });
+    }
 
     // Lógica para el formulario de recarga (modal)
     const reloadForm = document.getElementById('reloadForm');
-    if (reloadForm) {
+    if (reloadForm && !reloadForm.hasAttribute('data-reload-enhanced')) {
+        reloadForm.setAttribute('data-reload-enhanced', 'true');
         reloadForm.addEventListener('submit', function(e) {
             e.preventDefault(); // SIEMPRE prevenir el submit por defecto primero
             console.log('[COTEMA] Submit reloadForm iniciado');
+            
             const fileInput = document.getElementById('newFile');
+            if (!fileInput) {
+                console.error('[COTEMA] No se encontró el input de archivo newFile');
+                Utils.showNotification('Error: campo de archivo no encontrado', 'error');
+                return;
+            }
+            
             if (fileInput.files.length === 0) {
                 Utils.showNotification('Por favor selecciona un archivo', 'warning');
                 console.log('[COTEMA] No se seleccionó archivo');
@@ -518,12 +542,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: formData
             })
             .then(response => {
+                console.log('[COTEMA] Response status:', response.status);
                 const contentType = response.headers.get("content-type");
                 if (contentType && contentType.indexOf("application/json") !== -1) {
                     return response.json();
                 } else {
                     return response.text().then(text => {
-                        throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
+                        console.error('[COTEMA] Server returned HTML instead of JSON:', text);
+                        if (response.status >= 500) {
+                            throw new Error("Error interno del servidor (500). Revisar logs del servidor.");
+                        } else if (response.status >= 400) {
+                            throw new Error(`Error del cliente (${response.status}). Verificar datos enviados.`);
+                        } else {
+                            throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
+                        }
                     });
                 }
             })
@@ -566,8 +598,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateProgress() {
-    fetch('/progress')
-            .then(response => response.json())
+        fetch('/progress')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 updateProgressBar(data.progress);
                 updateCurrentTask(data.current_task, data.message);
@@ -582,6 +619,8 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Error monitoring progress:', error);
+                // No mostrar error inmediatamente, podría ser temporal
+                // Solo después de varios fallos consecutivos
             });
     }
     
@@ -689,11 +728,24 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/dashboard';
     }
     
+    // Función global para mostrar el formulario de recarga
     window.showUploadForm = function() {
-        const modal = new bootstrap.Modal(document.getElementById('reloadUploadForm'));
-        modal.show();
+        try {
+            const modalElement = document.getElementById('reloadUploadForm');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            } else {
+                console.error('Modal reloadUploadForm no encontrado');
+                Utils.showNotification('Error: Modal no encontrado', 'error');
+            }
+        } catch (error) {
+            console.error('Error al mostrar modal:', error);
+            Utils.showNotification('Error al abrir formulario de carga', 'error');
+        }
     }
     
 }); // Cierre del DOMContentLoaded
+</script>
 </script>
 {% endblock %}

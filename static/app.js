@@ -1273,23 +1273,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
 
-    // Validación de formulario de upload
+    // Validación básica del formulario de upload (sin interferir con el manejo principal)
     const uploadForm = document.getElementById('uploadForm');
-    if (uploadForm) {
+    if (uploadForm && !uploadForm.hasAttribute('data-enhanced')) {
+        uploadForm.setAttribute('data-enhanced', 'true');
         uploadForm.addEventListener('submit', function(e) {
             const fileInput = document.getElementById('file');
             
-            if (fileInput.files.length === 0) {
+            if (fileInput && fileInput.files.length === 0) {
                 e.preventDefault();
                 Utils.showNotification('Por favor selecciona un archivo', 'warning');
                 return;
             }
 
-            const validation = Utils.validateExcelFile(fileInput.files[0]);
-            if (!validation.valid) {
-                e.preventDefault();
-                Utils.showNotification(validation.error, 'error');
-                return;
+            if (fileInput && fileInput.files.length > 0) {
+                const validation = Utils.validateExcelFile(fileInput.files[0]);
+                if (!validation.valid) {
+                    e.preventDefault();
+                    Utils.showNotification(validation.error, 'error');
+                    return;
+                }
             }
 
             // Mostrar loading en el botón
