@@ -1,3 +1,8 @@
+# Endpoint para consultar el progreso de carga/procesamiento
+@app.route('/progress', methods=['GET'])
+def get_progress():
+    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
+    return jsonify(progress_state)
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from datetime import datetime, timedelta
 import os
@@ -1266,7 +1271,17 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+
     try:
+        # Resetear datos globales y progreso al cargar un nuevo archivo
+        global global_data
+        global_data = {
+            'df': None,
+            'file_path': None,
+            'file_name': None,
+            'processed_date': None,
+            'ml_models_trained': False
+        }
         reset_progress()
         update_progress("Validando archivo", 1, 4, "Verificando archivo seleccionado...")
 

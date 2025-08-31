@@ -491,25 +491,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const reloadForm = document.getElementById('reloadForm');
     if (reloadForm) {
         reloadForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // SIEMPRE prevenir el submit por defecto primero
+            console.log('[COTEMA] Submit reloadForm iniciado');
             const fileInput = document.getElementById('newFile');
             if (fileInput.files.length === 0) {
-                e.preventDefault();
                 Utils.showNotification('Por favor selecciona un archivo', 'warning');
+                console.log('[COTEMA] No se seleccionó archivo');
                 return;
             }
             const validation = Utils.validateExcelFile(fileInput.files[0]);
             if (!validation.valid) {
-                e.preventDefault();
                 Utils.showNotification(validation.error, 'error');
+                console.log('[COTEMA] Archivo inválido:', validation.error);
                 return;
             }
-            // Mostrar modal de progreso
+            Utils.showNotification('¡Enviando archivo! (debug)', 'info');
+            console.log('[COTEMA] Mostrando modal de progreso...');
             showProgressModal();
             // Iniciar monitoreo de progreso
             startProgressMonitoring();
             // Enviar archivo
-            e.preventDefault();
             const formData = new FormData(this);
+            console.log('[COTEMA] Enviando fetch a /upload...');
             fetch('/upload', {
                 method: 'POST',
                 body: formData
@@ -525,6 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .then(data => {
+                console.log('[COTEMA] Respuesta recibida:', data);
                 if (data.success) {
                     showSuccessCompletion(data);
                 } else {
@@ -532,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
+                console.error('[COTEMA] Error en fetch:', error);
                 showError('Error de conexión: ' + error.message);
             });
         });
@@ -562,7 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateProgress() {
-        fetch('/api/progress')
+    fetch('/progress')
             .then(response => response.json())
             .then(data => {
                 updateProgressBar(data.progress);
