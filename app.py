@@ -1323,12 +1323,17 @@ def upload_file():
 
         update_progress("Archivo guardado", 2, 4, f"Archivo {filename} guardado. Procesamiento en background iniciado.")
 
-        return jsonify({
-            'success': True,
-            'message': f'Archivo {filename} subido. Procesamiento en background iniciado.',
-            'file_ready': True,
-            'background': True
-        })
+        # Si la petición es AJAX (fetch/XHR), devolver JSON. Si es formulario normal, redirigir.
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            return jsonify({
+                'success': True,
+                'message': f'Archivo {filename} subido. Procesamiento en background iniciado.',
+                'file_ready': True,
+                'background': True
+            })
+        else:
+            # Redirigir a la página principal (index) tras subir el archivo
+            return redirect(url_for('index'))
 
     except Exception as e:
         logging.exception(f"❌ Error general en upload_file: {e}")
@@ -1548,10 +1553,11 @@ def dashboard():
         logging.info(f"DataFrame loaded with {len(df)} rows and columns: {list(df.columns)}")
 
         # --- Cálculo de meses para el selector (punto común de error) ---
-        # Asumimos que la columna de fecha se llama 'fecha_ingreso' después de la estandarización
-        date_column = 'fecha_ingreso' # Reemplaza con el nombre estandarizado real de tu columna de fecha
+        # Buscar columna de fecha válida: 'fecha_ingreso' o 'fecha_in'
+        possible_date_columns = ['fecha_ingreso', 'fecha_in']
+        date_column = next((col for col in possible_date_columns if col in df.columns), None)
         months = []
-        if date_column in df.columns:
+        if date_column:
             # Convertir a datetime, forzando errores a NaT (Not a Time)
             valid_dates = pd.to_datetime(df[date_column], errors='coerce').dropna()
             if not valid_dates.empty:
@@ -1560,7 +1566,7 @@ def dashboard():
             else:
                 logging.warning(f"Column '{date_column}' exists but contains no valid dates.")
         else:
-            logging.error(f"Critical: Date column '{date_column}' not found in DataFrame. Available columns: {list(df.columns)}")
+            logging.error(f"Critical: No valid date column found in DataFrame. Available columns: {list(df.columns)}")
             # Fallback: si no hay columna de fecha, usar una lista genérica
             months = ['2025-08', '2025-07', '2025-06']
 
