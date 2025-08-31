@@ -1,3 +1,37 @@
+// Monitoreo de estado ML/análisis profundo
+function monitorMLStatus() {
+    const statusDiv = document.getElementById('mlStatus');
+    if (!statusDiv) return;
+
+    function checkStatus() {
+        fetch('/ml-status')
+            .then(res => res.json())
+            .then(data => {
+                if (data.deep_analysis_in_progress) {
+                    const prog = data.ml_progress || { percent: 0, step: '', processed: 0, total: 0 };
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-robot fa-spin"></i> Análisis profundo en progreso...
+                            <div class="progress my-2" style="height: 20px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: ${prog.percent}%" aria-valuenow="${prog.percent}" aria-valuemin="0" aria-valuemax="100">${prog.percent}%</div>
+                            </div>
+                            <div><strong>Paso:</strong> ${prog.step || 'Preparando...'}</div>
+                            <div><strong>Registros procesados:</strong> ${prog.processed} / ${prog.total}</div>
+                        </div>`;
+                    setTimeout(checkStatus, 1500);
+                } else if (data.ml_models_trained) {
+                    statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Modelos ML entrenados. Resultados avanzados disponibles.</div>';
+                } else {
+                    statusDiv.innerHTML = '';
+                }
+            })
+            .catch(() => {
+                statusDiv.innerHTML = '<div class="alert alert-warning">No se pudo consultar el estado del análisis profundo.</div>';
+            });
+    }
+    checkStatus();
+}
+
 // Funciones JavaScript para COTEMA Analytics
 
 // Configuración global
@@ -1222,6 +1256,8 @@ const KPIManager = {
 
 // Event listeners y inicialización
 document.addEventListener('DOMContentLoaded', function() {
+    // Iniciar monitoreo de estado ML si existe el div correspondiente
+    monitorMLStatus();
     // Inicializar tooltips de Bootstrap
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {

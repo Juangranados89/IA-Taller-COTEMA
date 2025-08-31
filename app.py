@@ -1,3 +1,13 @@
+@app.route('/ml-status')
+def ml_status():
+    """Devuelve el estado del análisis profundo y el entrenamiento ML."""
+    status = {
+        'deep_analysis_in_progress': global_data.get('deep_analysis_in_progress', False),
+        'ml_models_trained': global_data.get('ml_models_trained', False),
+        'analysis_type': global_data.get('analysis_type', ''),
+        'ml_progress': global_data.get('ml_progress', {'percent': 0, 'step': '', 'processed': 0, 'total': 0})
+    }
+    return jsonify(status)
 # ...existing code...
 # (Buscar la inicialización de la app Flask)
 # Inicialización de la aplicación Flask
@@ -376,7 +386,7 @@ class COTEMAMLEngine:
             print(f"❌ Error extrayendo features: {e}")
             return None
 
-    def train_models_enhanced(self, df=None):
+    def train_models_enhanced(self, df=None, progress_callback=None):
         """Entrena modelos ML mejorados usando datos reales del taller cuando están disponibles"""
         if not ML_AVAILABLE:
             print("ML libraries not available, using enhanced statistical mode")
@@ -385,65 +395,62 @@ class COTEMAMLEngine:
             
         try:
             print("🤖 Iniciando entrenamiento ML mejorado con datos de COTEMA...")
-            
+            if progress_callback:
+                progress_callback('Extrayendo características', 10, 0)
             # Usar datos reales si están disponibles
             real_data_used = False
             if global_data.get('df') is not None and len(global_data['df']) >= 10:
                 df = global_data['df']
                 real_data_used = True
                 print(f"✅ Usando datos reales del taller: {len(df)} registros")
-                
                 # Extraer características de datos reales
                 features_df = self.extract_features_from_real_data(df)
-                
+                if progress_callback:
+                    progress_callback('Entrenando modelos ML', 40, len(df))
                 if features_df is not None and len(features_df) > 5:
                     self.data = df
-                    
                     # TARGETS para entrenamiento basados en datos reales
                     targets = {}
-                    
                     # 1. FR-30: Probabilidad de falla en 30 días
                     if 'criticidad_atencion' in features_df.columns and 'complejidad_sistema' in features_df.columns:
                         targets['fr30'] = (features_df['criticidad_atencion'] * 0.25 + 
                                          features_df['complejidad_sistema'] * 0.2 +
                                          features_df.get('desgaste_nivel', 2) * 0.15).clip(0, 1)
-                    
                     # 2. RUL: Días hasta próxima falla basado en historial
                     if 'historial_averias' in features_df.columns and 'mttr' in features_df.columns:
                         targets['rul'] = np.maximum(15, 
                                                    180 - features_df['historial_averias'] * 5 - 
                                                    features_df['mttr'] / 50)
-                    
                     # 3. Preparar features para entrenamiento
                     feature_columns = ['equipo_tipo_num', 'mes_ingreso', 'criticidad_atencion', 
                                      'complejidad_sistema', 'historial_averias']
                     available_features = [col for col in feature_columns if col in features_df.columns]
-                    
                     if len(available_features) >= 3:
                         features_array = features_df[available_features].values
-                        
                         # Normalizar features
                         self.scalers['main'] = StandardScaler()
                         features_scaled = self.scalers['main'].fit_transform(features_array)
-                        
                         # Entrenar modelos con datos reales
                         print("🔄 Entrenando FR-30 con patrones reales de COTEMA...")
                         if 'fr30' in targets and len(targets['fr30']) > 5:
                             self.models['fr30'] = RandomForestRegressor(n_estimators=100, random_state=42, 
                                                                       max_depth=8, min_samples_split=5)
                             self.models['fr30'].fit(features_scaled, targets['fr30'])
-                        
+                            if progress_callback:
+                                progress_callback('Entrenando FR-30', 60, len(df))
                         print("🔄 Entrenando RUL con datos históricos de mantenimiento...")
                         if 'rul' in targets and len(targets['rul']) > 5:
                             self.models['rul'] = RandomForestRegressor(n_estimators=100, random_state=42,
                                                                      max_depth=8, min_samples_split=5)
                             self.models['rul'].fit(features_scaled, targets['rul'])
-                        
+                            if progress_callback:
+                                progress_callback('Entrenando RUL', 80, len(df))
                         print("🔄 Entrenando detector de anomalías con patrones del taller...")
                         self.models['anomaly'] = IsolationForest(contamination=0.15, random_state=42, 
                                                                n_estimators=150, max_features=1.0)
                         self.models['anomaly'].fit(features_scaled)
-                        
+                        if progress_callback:
+                            progress_callback('Entrenando Anomaly', 90, len(df))
                         # Guardar metadatos del entrenamiento
                         self.training_metadata = {
                             'features_used': available_features,
@@ -451,13 +458,14 @@ class COTEMAMLEngine:
                             'training_samples': len(features_df),
                             'data_quality': 'high' if len(features_df) > 50 else 'medium'
                         }
-                        
                         self.ml_mode = True
                         self.is_trained = True
                         self.real_data_trained = True
                         print(f"✅ Modelos entrenados exitosamente con datos reales de COTEMA")
                         print(f"   Features utilizadas: {available_features}")
                         print(f"   Registros de entrenamiento: {len(features_df)}")
+                        if progress_callback:
+                            progress_callback('Completado', 100, len(df))
                         return True
                         
             # Fallback a datos sintéticos mejorados
@@ -1524,7 +1532,23 @@ def deep_analysis():
         # Marcar que el entrenamiento profundo está en proceso
         global_data['deep_analysis_in_progress'] = True
         global_data['analysis_type'] = 'deep'
-        
+
+        # Lanzar el entrenamiento ML en segundo plano
+        import threading
+        def run_deep_training():
+            try:
+                ml_engine.train_models_enhanced(global_data['df'])
+                global_data['ml_models_trained'] = True
+                global_data['deep_analysis_in_progress'] = False
+                global_data['analysis_type'] = 'deep_trained'
+            except Exception as e:
+                global_data['deep_analysis_in_progress'] = False
+                global_data['ml_models_trained'] = False
+                print(f"Error en análisis profundo: {e}")
+
+        thread = threading.Thread(target=run_deep_training, daemon=True)
+        thread.start()
+
         return jsonify({
             'success': True,
             'message': 'Análisis profundo iniciado en segundo plano. Puedes continuar usando el dashboard.',
