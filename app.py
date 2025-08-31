@@ -1,3 +1,10 @@
+# ...existing code...
+# (Buscar la inicialización de la app Flask)
+# Inicialización de la aplicación Flask
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+# ...existing code...
+
 # Endpoint para consultar el progreso de carga/procesamiento
 @app.route('/progress', methods=['GET'])
 def get_progress():
