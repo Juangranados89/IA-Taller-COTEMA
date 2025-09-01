@@ -171,7 +171,7 @@ def process_cotema_data(df_raw):
                 elif new_col == 'fecha_in':
                     fecha = parse_date(raw_value)
                     record[new_col] = fecha.isoformat() if fecha else None
-                    if fecha and fecha > today:
+                    if fecha and str(fecha) != 'NaT' and hasattr(fecha, 'year') and fecha > today:
                         errors.append('ERROR_FECHA_FUTURA')
                         
                 elif new_col == 'fecha_out':
