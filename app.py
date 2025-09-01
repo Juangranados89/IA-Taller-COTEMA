@@ -1613,8 +1613,8 @@ def deep_analysis():
         if global_data['df'] is None:
             return jsonify({'error': 'No hay archivo cargado'}), 400
         
-        if not ML_AVAILABLE:
-            return jsonify({'error': 'Machine Learning no disponible en este entorno'}), 400
+        if not REAL_ML_AVAILABLE or real_ml_engine is None:
+            return jsonify({'error': 'Motor de Machine Learning profundo no disponible en este entorno'}), 400
         
         # Marcar que el entrenamiento profundo está en proceso
         global_data['deep_analysis_in_progress'] = True
@@ -1624,7 +1624,7 @@ def deep_analysis():
         import threading
         def run_deep_training():
             try:
-                ml_engine.train_models_enhanced(global_data['df'])
+                real_ml_engine.train_real_ml_models(global_data['df'])
                 global_data['ml_models_trained'] = True
                 global_data['deep_analysis_in_progress'] = False
                 global_data['analysis_type'] = 'deep_trained'
