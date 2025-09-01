@@ -1348,7 +1348,11 @@ def upload_file():
     except Exception as e:
         logging.exception(f"❌ Error general en upload_file: {e}")
         set_progress_error(f'Error inesperado en el servidor: {str(e)}')
-        return jsonify({'error': f'Error inesperado en el servidor: {str(e)}'}), 500
+        # Asegurarse de que siempre se devuelva un objeto JSON válido
+        return jsonify({
+            'success': False,
+            'error': f'Error inesperado en el servidor: {str(e)}'
+        }), 500
 
 
 def process_uploaded_file(filepath, filename):
