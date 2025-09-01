@@ -455,11 +455,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const formData = new FormData(this);
             
-            // Mostrar modal de progreso
-            showProgressModal();
-            
-            // Iniciar monitoreo de progreso
-            startProgressMonitoring();
+            // Mostrar modal de progreso simple
+            showSimpleProgressModal();
             
             // Enviar archivo
             fetch('/upload', {
@@ -468,7 +465,6 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => {
                 console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers.get("content-type"));
                 
                 // Verificar si la respuesta es JSON antes de parsear
                 const contentType = response.headers.get("content-type");
@@ -478,27 +474,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Si no es JSON, capturar el texto de error HTML
                     return response.text().then(text => {
                         console.error('Server returned HTML instead of JSON:', text);
-                        if (response.status >= 500) {
-                            throw new Error("Error interno del servidor (500). Revisar logs del servidor.");
-                        } else if (response.status >= 400) {
-                            throw new Error(`Error del cliente (${response.status}). Verificar datos enviados.`);
-                        } else {
-                            throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
-                        }
+                        throw new Error("Error interno del servidor. Revisar logs.");
                     });
                 }
             })
             .then(data => {
                 console.log('Response data:', data);
+                hideSimpleProgressModal();
+                
                 if (data.success) {
-                    showSuccessCompletion(data);
+                    showSuccessMessage(data);
                 } else {
-                    showError(data.error || 'Error desconocido en el procesamiento');
+                    showErrorMessage(data.error || 'Error desconocido en el procesamiento');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                showError('Error de conexión: ' + error.message);
+                hideSimpleProgressModal();
+                showErrorMessage('Error de conexión: ' + error.message);
             });
         });
     }
@@ -576,25 +569,35 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let progressInterval;
     
-    function showProgressModal() {
+    function showSimpleProgressModal() {
         const modal = new bootstrap.Modal(document.getElementById('progressModal'));
         modal.show();
-        resetProgressSteps();
+        
+        // Mostrar mensaje de carga simple
+        document.getElementById('currentTask').textContent = 'Procesando archivo Excel...';
+        document.getElementById('progressMessage').innerHTML = 
+            '<i class="fas fa-spinner fa-spin"></i> Por favor espera mientras procesamos tu archivo.';
+        document.getElementById('progressBar').style.width = '50%';
+        document.getElementById('progressPercent').textContent = '50%';
     }
     
-    function hideProgressModal() {
+    function hideSimpleProgressModal() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
         if (modal) {
             modal.hide();
         }
-        if (progressInterval) {
-            clearInterval(progressInterval);
-        }
     }
     
-    function startProgressMonitoring() {
-        progressInterval = setInterval(updateProgress, 500); // Actualizar cada 500ms
-        updateProgress(); // Actualización inmediata
+    function showSuccessMessage(data) {
+        Utils.showNotification(`✅ ${data.message}`, 'success');
+        // Redirigir al dashboard después de 2 segundos
+        setTimeout(() => {
+            window.location.href = '/dashboard';
+        }, 2000);
+    }
+    
+    function showErrorMessage(message) {
+        Utils.showNotification(`❌ ${message}`, 'error');
     }
     
     function updateProgress() {

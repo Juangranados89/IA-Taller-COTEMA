@@ -1285,7 +1285,6 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-
     try:
         # Resetear datos globales y progreso al cargar un nuevo archivo
         global global_data
@@ -1296,24 +1295,17 @@ def upload_file():
             'processed_date': None,
             'ml_models_trained': False
         }
-        reset_progress()
-        update_progress("Validando archivo", 1, 4, "Verificando archivo seleccionado...")
 
         if 'file' not in request.files:
-            set_progress_error('No se seleccionó ningún archivo')
-            return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
+            return jsonify({'success': False, 'error': 'No se seleccionó ningún archivo'}), 400
 
         file = request.files['file']
         if file.filename == '':
-            set_progress_error('No se seleccionó ningún archivo')
-            return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
-
-        update_progress("Guardando archivo", 2, 4, f"Guardando {file.filename}...")
+            return jsonify({'success': False, 'error': 'No se seleccionó ningún archivo'}), 400
 
         # Validar extensión
         if not file.filename.lower().endswith(('.xlsx', '.xls')):
-            set_progress_error('Formato no soportado. Use .xlsx o .xls')
-            return jsonify({'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
+            return jsonify({'success': False, 'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
 
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -1322,33 +1314,52 @@ def upload_file():
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         file.save(filepath)
 
-        # Lanzar procesamiento en background para evitar timeouts de worker
+        # Procesamiento directo sin background threading
         try:
-            thread = threading.Thread(target=process_uploaded_file, args=(filepath, filename), daemon=True)
-            thread.start()
-            logging.info(f"Background thread started for {filename}")
-        except Exception as e_thread:
-            logging.error(f"Failed to start background processing thread: {e_thread}")
-            set_progress_error(f"Error iniciando procesamiento en background: {e_thread}")
+            logging.info(f"Processing file {filename} directly...")
+            
+            # Leer archivo Excel sin límites de filas
+            df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', engine='openpyxl')
+            logging.info(f"✅ Excel file loaded successfully. Shape: {df.shape}")
+            
+            # Normalización básica
+            df = sanitize_column_names(df)
+            df = df.dropna(how='all')
+            
+            logging.info(f"Final DataFrame shape: {df.shape}")
+            
+            # Almacenar datos
+            global_data['df'] = df
+            global_data['file_path'] = filepath
+            global_data['file_name'] = filename
+            global_data['processed_date'] = datetime.now()
+            global_data['ml_models_trained'] = False
 
-        update_progress("Archivo guardado", 2, 4, f"Archivo {filename} guardado. Procesamiento en background iniciado.")
+            basic_stats = {
+                'total_registros': len(df),
+                'columnas_total': len(df.columns),
+                'file_loaded': True,
+                'needs_analysis': True
+            }
+            global_data['stats'] = basic_stats
 
-        # Si la petición es AJAX (fetch/XHR), devolver JSON. Si es formulario normal, redirigir.
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            logging.info(f"File {filename} processed successfully. Rows: {len(df)}")
+            
             return jsonify({
                 'success': True,
-                'message': f'Archivo {filename} subido. Procesamiento en background iniciado.',
-                'file_ready': True,
-                'background': True
+                'message': f'Archivo {filename} procesado exitosamente. {len(df)} registros cargados.',
+                'stats': basic_stats
             })
-        else:
-            # Redirigir a la página principal (index) tras subir el archivo
-            return redirect(url_for('index'))
+
+        except Exception as e:
+            logging.exception(f"Error processing file: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Error procesando archivo: {str(e)}'
+            }), 500
 
     except Exception as e:
         logging.exception(f"❌ Error general en upload_file: {e}")
-        set_progress_error(f'Error inesperado en el servidor: {str(e)}')
-        # Asegurarse de que siempre se devuelva un objeto JSON válido
         return jsonify({
             'success': False,
             'error': f'Error inesperado en el servidor: {str(e)}'
