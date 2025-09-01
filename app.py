@@ -2007,12 +2007,12 @@ def train_real_ml():
         # Entrenar modelos de ML real en background
         def train_background():
             try:
-                set_progress('training_real_ml', 'Iniciando entrenamiento de ML Real...', 10)
+                update_progress('Iniciando entrenamiento de ML Real...', 1, 4, 'training_real_ml')
                 
                 success = real_ml_engine.train_real_ml_models(global_data['df'])
                 
                 if success:
-                    set_progress('training_real_ml', 'Entrenamiento completado exitosamente', 100)
+                    update_progress('Entrenamiento completado exitosamente', 4, 4, 'training_real_ml')
                 else:
                     set_progress_error('Error en entrenamiento de ML Real')
                     
