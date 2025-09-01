@@ -3,6 +3,7 @@ def process_cotema_data(df_raw):
     Agente especializado de procesamiento de datos para COTEMA.
     Normaliza y valida datos de mantenimiento de equipos según especificaciones.
     """
+    import pandas as pd
     import unicodedata
     import hashlib
     from datetime import datetime, timedelta
@@ -35,7 +36,9 @@ def process_cotema_data(df_raw):
     
     def clean_text(text):
         """Limpiar texto: trimear, quitar espacios NO-BREAK, unificar espacios"""
-        if pd.isna(text) or text is None:
+        if text is None or (hasattr(text, '__len__') and len(str(text).strip()) == 0):
+            return None
+        if str(text).lower() in ['nan', 'none', '']:
             return None
         text = str(text).strip()
         # Quitar espacios NO-BREAK (U+00A0)
@@ -62,7 +65,7 @@ def process_cotema_data(df_raw):
     
     def parse_boolean(value):
         """Parsear booleanos flexibles"""
-        if pd.isna(value):
+        if value is None or str(value).strip().lower() in ['nan', 'none', '']:
             return None
         if isinstance(value, bool):
             return value
@@ -78,7 +81,7 @@ def process_cotema_data(df_raw):
     
     def parse_date(date_val):
         """Parsear fechas con múltiples formatos"""
-        if pd.isna(date_val):
+        if date_val is None or str(date_val).strip().lower() in ['nan', 'none', '']:
             return None
         
         if isinstance(date_val, datetime):
@@ -97,7 +100,7 @@ def process_cotema_data(df_raw):
     
     def safe_numeric(value, min_val=0):
         """Convertir a numérico con validación"""
-        if pd.isna(value):
+        if value is None or str(value).strip().lower() in ['nan', 'none', '']:
             return None
         
         try:
