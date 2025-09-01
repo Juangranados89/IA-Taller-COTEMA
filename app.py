@@ -1318,9 +1318,43 @@ def upload_file():
         try:
             logging.info(f"Processing file {filename} directly...")
             
-            # Leer archivo Excel sin límites de filas
-            df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', engine='openpyxl')
-            logging.info(f"✅ Excel file loaded successfully. Shape: {df.shape}")
+            # Primero, detectar las hojas disponibles
+            try:
+                excel_file = pd.ExcelFile(filepath, engine='openpyxl')
+                sheet_names = excel_file.sheet_names
+                logging.info(f"Available sheets: {sheet_names}")
+                
+                # Buscar la hoja correcta por prioridad
+                target_sheet = None
+                for sheet_priority in ['Datos_Limpios', 'REG', 'Datos', 'Hoja1', 'Sheet1']:
+                    if sheet_priority in sheet_names:
+                        target_sheet = sheet_priority
+                        break
+                
+                # Si no encuentra ninguna hoja conocida, usar la primera
+                if target_sheet is None:
+                    target_sheet = sheet_names[0]
+                    
+                logging.info(f"Using sheet: {target_sheet}")
+                
+                # Leer archivo Excel sin límites de filas
+                try:
+                    # Intentar con skiprows=4 y columnas específicas (formato original)
+                    df = pd.read_excel(filepath, sheet_name=target_sheet, skiprows=4, usecols='B:Y', engine='openpyxl')
+                except Exception as e1:
+                    logging.warning(f"Failed with skiprows=4, trying without: {e1}")
+                    try:
+                        # Intentar sin skiprows ni columnas específicas
+                        df = pd.read_excel(filepath, sheet_name=target_sheet, engine='openpyxl')
+                    except Exception as e2:
+                        logging.error(f"Failed to read Excel file: {e2}")
+                        raise Exception(f"No se pudo leer el archivo Excel. Hojas disponibles: {sheet_names}. Error: {str(e2)}")
+                
+                logging.info(f"✅ Excel file loaded successfully. Shape: {df.shape}")
+                
+            except Exception as e:
+                logging.error(f"Error reading Excel file: {e}")
+                raise Exception(f"Error leyendo archivo Excel: {str(e)}")
             
             # Normalización básica
             df = sanitize_column_names(df)
@@ -1339,15 +1373,16 @@ def upload_file():
                 'total_registros': len(df),
                 'columnas_total': len(df.columns),
                 'file_loaded': True,
-                'needs_analysis': True
+                'needs_analysis': True,
+                'sheet_used': target_sheet
             }
             global_data['stats'] = basic_stats
 
-            logging.info(f"File {filename} processed successfully. Rows: {len(df)}")
+            logging.info(f"File {filename} processed successfully. Rows: {len(df)}, Sheet: {target_sheet}")
             
             return jsonify({
                 'success': True,
-                'message': f'Archivo {filename} procesado exitosamente. {len(df)} registros cargados.',
+                'message': f'Archivo {filename} procesado exitosamente. {len(df)} registros cargados desde la hoja "{target_sheet}".',
                 'stats': basic_stats
             })
 
