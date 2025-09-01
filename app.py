@@ -1,15 +1,3 @@
-# ...existing code...
-# (Buscar la inicialización de la app Flask)
-# Inicialización de la aplicación Flask
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
-# ...existing code...
-
-# Endpoint para consultar el progreso de carga/procesamiento
-@app.route('/progress', methods=['GET'])
-def get_progress():
-    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
-    return jsonify(progress_state)
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from datetime import datetime, timedelta
 import os
@@ -20,6 +8,27 @@ import hashlib
 import math
 import logging
 import threading
+
+# Inicialización de la aplicación Flask
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+@app.route('/ml-status')
+def ml_status():
+    """Devuelve el estado del análisis profundo y el entrenamiento ML."""
+    status = {
+        'deep_analysis_in_progress': global_data.get('deep_analysis_in_progress', False),
+        'ml_models_trained': global_data.get('ml_models_trained', False),
+        'analysis_type': global_data.get('analysis_type', ''),
+        'ml_progress': global_data.get('ml_progress', {'percent': 0, 'step': '', 'processed': 0, 'total': 0})
+    }
+    return jsonify(status)
+
+# Endpoint para consultar el progreso de carga/procesamiento
+@app.route('/progress', methods=['GET'])
+def get_progress():
+    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
+    return jsonify(progress_state)
 
 # Importaciones condicionales de ML - con manejo robusto de errores
 try:
