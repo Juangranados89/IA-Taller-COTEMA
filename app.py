@@ -605,9 +605,30 @@ def analyze_statistics():
         if df is None or df.empty:
             return jsonify({'success': True, 'data': {'top_equipos': [], 'total_correctivas_en_ventana': 0, 'equipos_con_correctivas': 0}})
 
-        days = int(request.json.get('days', 30)) if request.is_json else 30
+        # Obtener días de manera más robusta
+        days = 30  # valor por defecto
+        try:
+            request_data = request.get_json() or {}
+            days = int(request_data.get('days', 30))
+        except (TypeError, ValueError):
+            days = 30
+
+        update_progress("Analizando estadísticas", 1, 2, f"Analizando últimos {days} días...")
         fr30 = get_fr30_analysis(df, days=days)
-        return jsonify({'success': True, 'data': fr30})
+        
+        # Agregar información adicional al análisis
+        enhanced_data = {
+            **fr30,
+            'analysis_method': 'Real data FR-30',
+            'total_registros_dataset': len(df),
+            'columnas_disponibles': list(df.columns),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        update_progress("Análisis completado", 2, 2, "Estadísticas generadas exitosamente")
+        reset_progress()
+        
+        return jsonify({'success': True, 'data': enhanced_data})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -665,6 +686,69 @@ def retrain_models():
         ml_engine.ml_mode = False
         return train_models()
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/ml_analysis', methods=['POST'])
+def ml_analysis():
+    """Análisis completo de ML: entrena modelos y genera predicciones para equipos."""
+    try:
+        df = global_data.get('df')
+        if df is None or df.empty:
+            return jsonify({'success': False, 'error': 'No hay datos cargados para análisis ML'}), 400
+
+        # Paso 1: Entrenar modelos
+        update_progress("Entrenando modelos ML", 1, 3, "Configurando algoritmos...")
+        ok = ml_engine.train_models_enhanced(df)
+        global_data['ml_models_trained'] = bool(ok)
+        
+        if not ok:
+            return jsonify({'success': False, 'error': 'No se pudieron entrenar los modelos (sklearn no disponible o datos insuficientes)'}), 400
+
+        # Paso 2: Obtener códigos de equipos
+        update_progress("Generando predicciones", 2, 3, "Analizando equipos...")
+        equipos = ml_engine.load_real_equipment_codes()[:10]  # Limitar a 10 equipos para no sobrecargar
+        
+        if not equipos:
+            return jsonify({'success': False, 'error': 'No se encontraron códigos de equipos válidos'}), 400
+
+        # Paso 3: Generar predicciones para cada equipo
+        update_progress("Finalizando análisis", 3, 3, "Compilando resultados...")
+        results = {
+            'modelos_entrenados': list(ml_engine.models.keys()),
+            'total_equipos_analizados': len(equipos),
+            'predicciones': {},
+            'resumen': {
+                'equipos_alto_riesgo_fr30': 0,
+                'equipos_bajo_rul': 0,
+                'anomalias_detectadas': 0
+            },
+            'timestamp': datetime.now().isoformat(),
+            'ml_engine_status': 'active' if ml_engine.is_trained else 'inactive'
+        }
+
+        for equipo in equipos:
+            try:
+                pred = ml_engine.predict_equipment({'equipo': equipo})
+                results['predicciones'][equipo] = pred
+                
+                # Actualizar resumen
+                if pred.get('fr30_risk', 0) > 0.7:
+                    results['resumen']['equipos_alto_riesgo_fr30'] += 1
+                if pred.get('rul_days', 999) < 30:
+                    results['resumen']['equipos_bajo_rul'] += 1
+                if pred.get('anomaly_score', 0) > 0.6:
+                    results['resumen']['anomalias_detectadas'] += 1
+                    
+            except Exception as e:
+                logger.warning(f"Error prediciendo para equipo {equipo}: {e}")
+                results['predicciones'][equipo] = {'error': str(e)}
+
+        reset_progress()
+        return jsonify({'success': True, 'data': results})
+
+    except Exception as e:
+        logger.exception(f"ml_analysis error: {e}")
+        set_progress_error(f'Error en análisis ML: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/ml/prediction', methods=['POST'])
