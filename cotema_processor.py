@@ -178,11 +178,13 @@ def _generate_quality_report(df: pd.DataFrame) -> Dict:
     # Fechas inválidas
     if 'fecha' in df.columns:
         try:
-            pd.to_datetime(df['fecha'], errors='coerce')
-            fechas_nulas = df['fecha'].isna().sum()
+            # Conversión segura para evitar problemas de índice duplicado
+            converted_dates = pd.to_datetime(df['fecha'], errors='coerce')
+            fechas_nulas = converted_dates.isna().sum()
             if fechas_nulas > 0:
                 errores['fechas_invalidas'] = int(fechas_nulas)
-        except:
+        except Exception as e:
+            logging.warning(f"⚠️ Error analizando fechas en quality report: {e}")
             errores['fechas_no_procesables'] = total_registros
     
     # Valores faltantes por columna
