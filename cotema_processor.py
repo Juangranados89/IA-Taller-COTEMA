@@ -214,18 +214,14 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
     for col in date_columns:
         if col in df_norm.columns:
             try:
-                # Hacer una copia para evitar problemas de índice duplicado
-                original_values = df_norm[col].copy().reset_index(drop=True)
+                # Convertir a datetime y asignar los valores directamente para evitar problemas de índice
+                converted_dates = pd.to_datetime(df_norm[col], errors='coerce')
                 
-                # Intentar conversión a datetime
-                converted_dates = pd.to_datetime(original_values, errors='coerce')
-                
-                # Verificar que la conversión fue exitosa
+                # Contar conversiones exitosas
                 converted_count = converted_dates.notna().sum()
-                total_count = original_values.notna().sum()
-                
+                total_count = df_norm[col].notna().sum()
+
                 if converted_count > 0:
-                    # Asignar los valores directamente para evitar problemas de índice
                     df_norm[col] = converted_dates.values
                     logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos)")
                 else:
@@ -233,7 +229,6 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
                     
             except Exception as e:
                 logging.warning(f"⚠️ Error normalizando fechas en {col}: {e}")
-                # Mantener valores originales en caso de error
     
     # Normalizar códigos de equipo
     if 'equipo' in df_norm.columns:
