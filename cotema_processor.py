@@ -225,7 +225,8 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
                 total_count = original_values.notna().sum()
                 
                 if converted_count > 0:
-                    df_norm[col] = converted_dates
+                    # Asignar los valores directamente para evitar problemas de índice
+                    df_norm[col] = converted_dates.values
                     logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos)")
                 else:
                     logging.warning(f"⚠️ No se pudieron convertir fechas en {col}, manteniendo como texto")
