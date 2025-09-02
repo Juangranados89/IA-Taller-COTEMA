@@ -332,287 +332,166 @@ class RealCOTEMAMLEngine:
             return {}
     
     def train_real_ml_models(self, df):
-        """Entrenar modelos de ML REALES que aprenden de los datos"""
+        """
+        Entrena todos los modelos de ML (FR-30, RUL, etc.) usando los datos proporcionados.
+        """
         if not ML_AVAILABLE:
-            print("❌ ML libraries not available")
+            print("❌ ML libraries not available. Cannot train models.")
             return False
         
         try:
-            print("🤖 Iniciando entrenamiento de Machine Learning REAL con datos proporcionados...")
+            print("🚀 Iniciando ciclo de entrenamiento de ML Real...")
+            self.is_trained = False
             
-            if df is None or df.empty:
-                print("❌ DataFrame de entrada está vacío. No se puede entrenar.")
+            # 1. Feature Engineering Automático
+            features_df, original_df = self.automatic_feature_engineering(df)
+            if features_df.empty:
+                print("❌ Falló el Feature Engineering. Abortando entrenamiento.")
                 return False
 
-            # 1. Feature Engineering automático
-            features_df, original_df = self.automatic_feature_engineering(df)
-            
-            if features_df.empty:
-                print("❌ No se pudieron generar features")
-                return False
-            
-            # 2. Crear targets automáticamente
+            # 2. Creación de Targets de ML
             targets = self.create_ml_targets(original_df, features_df)
             
-            if not targets:
-                print("❌ No se pudieron generar targets")
-                return False
-            
-            # 3. Preparar datos para entrenamiento
-            X = features_df.values
-            
-            # Normalizar features
-            self.scalers['main'] = StandardScaler()
-            X_scaled = self.scalers['main'].fit_transform(X)
-            
-            print(f"📊 Datos preparados: {X_scaled.shape[0]} muestras, {X_scaled.shape[1]} features")
-            
-            # 4. Entrenar múltiples modelos para cada target
-            for target_name, y in targets.items():
-                print(f"\n🔄 Entrenando modelos para target: {target_name}")
+            # ===== ENTRENAMIENTO DEL MODELO FR-30 (RIESGO DE FALLA A 30 DÍAS) =====
+            # Usaremos 'criticidad' como nuestro target proxy para el riesgo de falla.
+            # 2 = Correctiva (falla), 1 = Media, 0 = Preventiva (no falla)
+            if 'criticidad' in targets:
+                print("🎯 Target 'criticidad' encontrado. Entrenando modelo FR-30...")
                 
-                try:
-                    # Filtrar datos válidos
-                    valid_mask = ~(pd.isna(y) | pd.isna(X_scaled).any(axis=1))
-                    X_valid = X_scaled[valid_mask]
-                    y_valid = y[valid_mask]
-                    
-                    if len(y_valid) < 10:
-                        print(f"⚠️  Pocos datos válidos para {target_name}: {len(y_valid)}")
-                        continue
-                    
-                    # Decidir tipo de problema (regresión vs clasificación)
-                    is_classification = len(np.unique(y_valid)) <= 10 and target_name in ['criticidad', 'reincidencia_90d', 'es_anomalia']
-                    
-                    if is_classification:
-                        print(f"   📋 Problema de clasificación detectado")
-                        
-                        # Split de datos
-                        X_train, X_test, y_train, y_test = train_test_split(
-                            X_valid, y_valid, test_size=0.2, random_state=42, stratify=y_valid
-                        )
-                        
-                        # Random Forest Classifier
-                        rf_model = RandomForestClassifier(
-                            n_estimators=100, 
-                            max_depth=10, 
-                            random_state=42,
-                            n_jobs=-1
-                        )
-                        rf_model.fit(X_train, y_train)
-                        
-                        # Validación cruzada
-                        cv_scores = cross_val_score(rf_model, X_valid, y_valid, cv=5, scoring='accuracy')
-                        
-                        # Feature importance
-                        feature_importance = pd.DataFrame({
-                            'feature': self.feature_names,
-                            'importance': rf_model.feature_importances_
-                        }).sort_values('importance', ascending=False)
-                        
-                        self.models[target_name] = rf_model
-                        self.feature_importance[target_name] = feature_importance
-                        self.model_performance[target_name] = {
-                            'type': 'classification',
-                            'cv_mean': cv_scores.mean(),
-                            'cv_std': cv_scores.std(),
-                            'test_accuracy': rf_model.score(X_test, y_test),
-                            'n_samples': len(y_valid)
-                        }
-                        
-                        print(f"   ✅ Accuracy: {cv_scores.mean():.3f} (±{cv_scores.std():.3f})")
-                        print(f"   🔝 Top features: {feature_importance.head(3)['feature'].tolist()}")
-                        
-                    else:
-                        print(f"   📈 Problema de regresión detectado")
-                        
-                        # Split de datos
-                        X_train, X_test, y_train, y_test = train_test_split(
-                            X_valid, y_valid, test_size=0.2, random_state=42
-                        )
-                        
-                        # Random Forest Regressor
-                        rf_model = RandomForestRegressor(
-                            n_estimators=100, 
-                            max_depth=10, 
-                            random_state=42,
-                            n_jobs=-1
-                        )
-                        rf_model.fit(X_train, y_train)
-                        
-                        # XGBoost si está disponible
-                        if XGB_AVAILABLE:
-                            xgb_model = xgb.XGBRegressor(
-                                n_estimators=100,
-                                max_depth=6,
-                                random_state=42,
-                                n_jobs=-1
-                            )
-                            xgb_model.fit(X_train, y_train)
-                            
-                            # Comparar modelos
-                            rf_score = rf_model.score(X_test, y_test)
-                            xgb_score = xgb_model.score(X_test, y_test)
-                            
-                            if xgb_score > rf_score:
-                                best_model = xgb_model
-                                model_type = 'XGBoost'
-                            else:
-                                best_model = rf_model
-                                model_type = 'RandomForest'
-                        else:
-                            best_model = rf_model
-                            model_type = 'RandomForest'
-                        
-                        # Validación cruzada
-                        cv_scores = cross_val_score(best_model, X_valid, y_valid, cv=5, scoring='r2')
-                        
-                        # Feature importance
-                        if hasattr(best_model, 'feature_importances_'):
-                            feature_importance = pd.DataFrame({
-                                'feature': self.feature_names,
-                                'importance': best_model.feature_importances_
-                            }).sort_values('importance', ascending=False)
-                        else:
-                            feature_importance = pd.DataFrame()
-                        
-                        # Métricas
-                        y_pred = best_model.predict(X_test)
-                        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-                        
-                        self.models[target_name] = best_model
-                        self.feature_importance[target_name] = feature_importance
-                        self.model_performance[target_name] = {
-                            'type': 'regression',
-                            'model_used': model_type,
-                            'cv_r2_mean': cv_scores.mean(),
-                            'cv_r2_std': cv_scores.std(),
-                            'test_r2': best_model.score(X_test, y_test),
-                            'rmse': rmse,
-                            'n_samples': len(y_valid)
-                        }
-                        
-                        print(f"   ✅ R² Score: {cv_scores.mean():.3f} (±{cv_scores.std():.3f}) - {model_type}")
-                        print(f"   📊 RMSE: {rmse:.2f}")
-                        if not feature_importance.empty:
-                            print(f"   🔝 Top features: {feature_importance.head(3)['feature'].tolist()}")
+                y = targets['criticidad']
+                X = features_df
                 
-                except Exception as e:
-                    print(f"   ❌ Error entrenando {target_name}: {e}")
-                    continue
-            
-            # 5. Entrenar modelo de clustering
-            try:
-                print(f"\n🔄 Entrenando modelo de clustering...")
+                # Asegurarse que X y y tienen el mismo índice
+                y = y.loc[X.index]
+
+                # Normalizar features
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
+                self.scalers['fr30'] = scaler
+                self.feature_names = X.columns.tolist() # Guardar nombres de features
+
+                # Entrenar modelo de clasificación para predecir la criticidad
+                # Usamos un clasificador porque el target es categórico (0, 1, 2)
+                if XGB_AVAILABLE:
+                    print("⚡️ Usando XGBoost para FR-30.")
+                    model = xgb.XGBClassifier(objective='multi:softprob', eval_metric='mlogloss', use_label_encoder=False, random_state=42)
+                else:
+                    print("🌳 Usando RandomForest para FR-30.")
+                    model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
                 
-                # K-means para agrupar equipos por comportamiento
-                n_clusters = min(8, len(np.unique(original_df.iloc[:, 0])) // 3)  # Ajustar número de clusters
+                model.fit(X_scaled, y)
+                self.models['fr30'] = model
                 
-                if n_clusters >= 2:
-                    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-                    clusters = kmeans.fit_predict(X_scaled)
-                    
-                    # Calcular silhouette score
-                    sil_score = silhouette_score(X_scaled, clusters)
-                    
-                    self.models['clustering'] = kmeans
-                    self.model_performance['clustering'] = {
-                        'type': 'clustering',
-                        'n_clusters': n_clusters,
-                        'silhouette_score': sil_score,
-                        'n_samples': len(X_scaled)
-                    }
-                    
-                    print(f"   ✅ Clustering completado: {n_clusters} clusters, Silhouette: {sil_score:.3f}")
+                print("✅ Modelo FR-30 (Criticidad) entrenado.")
                 
-            except Exception as e:
-                print(f"   ❌ Error en clustering: {e}")
-            
-            # 6. Guardar historia de entrenamiento
-            self.training_history.append({
-                'timestamp': datetime.now(),
-                'n_samples': len(df),
-                'n_features': len(self.feature_names),
-                'models_trained': list(self.models.keys()),
-                'performance': self.model_performance.copy()
-            })
-            
-            self.is_trained = True
-            
-            print(f"\n🎉 Entrenamiento completado exitosamente!")
-            print(f"📊 Modelos entrenados: {list(self.models.keys())}")
-            print(f"🔬 Features generadas: {len(self.feature_names)}")
-            
-            return True
-            
+                # Guardar importancia de features
+                if hasattr(model, 'feature_importances_'):
+                    importances = model.feature_importances_
+                    feature_importance = sorted(zip(self.feature_names, importances), key=lambda x: x[1], reverse=True)
+                    self.feature_importance['fr30'] = feature_importance
+                    print(f"🔝 Top 5 features para FR-30: {feature_importance[:5]}")
+
+            else:
+                print("⚠️ No se pudo encontrar un target adecuado para FR-30. Modelo no entrenado.")
+
+            # (Aquí se podrían entrenar otros modelos como RUL si hubiera un target)
+
+            self.is_trained = 'fr30' in self.models
+            if self.is_trained:
+                print("✅ Ciclo de entrenamiento completado. El motor de ML está listo.")
+            else:
+                print("❌ No se pudo entrenar ningún modelo principal.")
+                
+            return self.is_trained
+
         except Exception as e:
-            print(f"❌ Error en entrenamiento: {e}")
+            print(f"❌ Error catastrófico durante el entrenamiento: {e}")
             import traceback
             traceback.print_exc()
+            self.is_trained = False
             return False
-    
-    def predict_with_real_ml(self, equipment_data=None, df=None):
-        """Hacer predicciones usando los modelos ML reales entrenados"""
-        if not self.is_trained:
-            return {"error": "Modelos no entrenados"}
-        
+
+    def predict_fr30_for_all_equipment(self, df):
+        """
+        Predice el riesgo de falla (FR-30) para todos los equipos en el DataFrame.
+        """
+        if not self.is_trained or 'fr30' not in self.models:
+            print("❌ Modelo FR-30 no entrenado. No se pueden hacer predicciones.")
+            # Intentar entrenar sobre la marcha
+            print("🔧 Intentando entrenar modelo sobre la marcha...")
+            if not self.train_real_ml_models(df):
+                 return None
+            
         try:
-            predictions = {}
+            print("🔮 Iniciando predicción de riesgo FR-30 para todos los equipos...")
             
-            # Si se proporciona un equipo específico, hacer predicción individual
-            if equipment_data:
-                # TODO: Implementar predicción individual
-                predictions['individual'] = "Funcionalidad en desarrollo"
+            # 1. Aplicar el mismo Feature Engineering
+            features_df, _ = self.automatic_feature_engineering(df)
+            if features_df.empty:
+                print("❌ Falló el Feature Engineering para los datos de predicción.")
+                return None
+
+            # 2. Alinear columnas con las del entrenamiento
+            # Asegurarse de que el df de predicción tenga las mismas columnas que el de entrenamiento
+            missing_cols = set(self.feature_names) - set(features_df.columns)
+            for c in missing_cols:
+                features_df[c] = 0 # Añadir columnas faltantes con 0
             
-            # Si se proporciona DataFrame, hacer predicciones en lote
-            if df is not None:
-                # Generar features de la misma manera que en entrenamiento
-                features_df, _ = self.automatic_feature_engineering(df)
-                
-                if not features_df.empty:
-                    X = features_df.values
-                    X_scaled = self.scalers['main'].transform(X)
-                    
-                    # Hacer predicciones con cada modelo
-                    for model_name, model in self.models.items():
-                        if model_name == 'clustering':
-                            clusters = model.predict(X_scaled)
-                            predictions[model_name] = {
-                                'clusters': clusters.tolist(),
-                                'cluster_centers': model.cluster_centers_.tolist()
-                            }
-                        else:
-                            pred = model.predict(X_scaled)
-                            
-                            # Agregar intervalos de confianza para regresión
-                            if hasattr(model, 'predict_proba'):
-                                # Clasificación - probabilidades
-                                probas = model.predict_proba(X_scaled)
-                                predictions[model_name] = {
-                                    'predictions': pred.tolist(),
-                                    'probabilities': probas.tolist(),
-                                    'confidence': np.max(probas, axis=1).tolist()
-                                }
-                            else:
-                                # Regresión - estimaciones de incertidumbre
-                                predictions[model_name] = {
-                                    'predictions': pred.tolist(),
-                                    'confidence': 'high'  # TODO: Implementar incertidumbre real
-                                }
+            # Asegurarse de que el orden de las columnas es el mismo
+            features_df = features_df[self.feature_names]
+
+            # 3. Escalar los datos con el scaler guardado
+            scaler = self.scalers['fr30']
+            X_scaled = scaler.transform(features_df)
+
+            # 4. Predecir probabilidades
+            model = self.models['fr30']
+            # Esto devuelve la probabilidad para cada clase [clase_0, clase_1, clase_2]
+            probabilities = model.predict_proba(X_scaled)
+
+            # El riesgo es la probabilidad de las clases de mayor criticidad (1 y 2)
+            # Clase 0: Preventiva, Clase 1: Media, Clase 2: Correctiva
+            fr30_risk = probabilities[:, 1] + probabilities[:, 2] # Suma de P(Media) y P(Alta)
+
+            # 5. Crear DataFrame de resultados
+            # Necesitamos la columna de código de equipo del df original
+            equipment_col = None
+            for col in df.columns:
+                if any(keyword in str(col).lower() for keyword in ['codigo', 'equipo', 'id']):
+                    equipment_col = col
+                    break
             
-            # Agregar información del modelo
-            predictions['model_info'] = {
-                'trained_at': self.training_history[-1]['timestamp'].isoformat() if self.training_history else None,
-                'models_available': list(self.models.keys()),
-                'feature_count': len(self.feature_names),
-                'performance': self.model_performance
-            }
+            if not equipment_col:
+                print("❌ No se encontró la columna de código de equipo en los datos originales.")
+                return None
+
+            results_df = pd.DataFrame({
+                'codigo': df[equipment_col],
+                'fr30_risk': fr30_risk
+            })
+
+            # Agrupar por equipo y tomar el riesgo máximo (un equipo puede tener varios registros)
+            final_predictions = results_df.groupby('codigo').agg(
+                fr30_risk=('fr30_risk', 'max')
+            ).reset_index()
+
+            print(f"✅ Predicción completada para {len(final_predictions)} equipos únicos.")
             
-            return predictions
-            
+            return final_predictions
+
         except Exception as e:
-            print(f"❌ Error en predicción: {e}")
-            return {"error": str(e)}
+            print(f"❌ Error durante la predicción masiva: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def train(self, df):
+        """Método simplificado para entrenar el motor REAL con datos nuevos"""
+        return self.train_real_ml_models(df)
+    
+    def predict(self, df):
+        """Método simplificado para predecir con el motor REAL"""
+        return self.predict_fr30_for_all_equipment(df)
     
     def get_model_insights(self):
         """Obtener insights automáticos del modelo"""

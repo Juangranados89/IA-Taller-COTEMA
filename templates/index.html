@@ -25,130 +25,189 @@
         </div>
     </div>
 
-    {% if not data_loaded %}
-    <!-- Upload Section -->
-    <div class="row mb-4">
+    <!-- Sección de Carga de Archivo -->
+    <div id="uploadSection" class="row mb-4">
         <div class="col-md-8 mx-auto">
-            <div class="card">
+            <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="fas fa-upload"></i>
-                        Cargar Archivo Excel
+                        Paso 1: Cargar Archivo de Datos
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="uploadForm">
+                    <form id="uploadForm">
                         <div class="mb-3">
                             <label for="file" class="form-label">
-                                <strong>Selecciona el archivo Excel con los datos del taller:</strong>
+                                <strong>Seleccione el archivo Excel con los registros del taller:</strong>
                             </label>
                             <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
                             <div class="form-text">
-                                Formatos soportados: .xlsx, .xls (máximo 50MB)
+                                Formatos soportados: .xlsx, .xls.
                             </div>
                         </div>
-                        
-                        <div class="mb-3">
-                            <h6>Columnas requeridas en el archivo:</h6>
-                            <ul class="list-unstyled">
-                                <li><i class="fas fa-check text-success"></i> <strong>CODIGO</strong> - Código del equipo</li>
-                                <li><i class="fas fa-check text-success"></i> <strong>FECHA_IN</strong> - Fecha de ingreso al taller</li>
-                                <li><i class="fas fa-check text-success"></i> <strong>FECHA_OUT</strong> - Fecha de salida del taller</li>
-                                <li><i class="fas fa-info-circle text-info"></i> <strong>SISTEMA_AFECTADO</strong> - Sistema que presentó la falla (opcional)</li>
-                                <li><i class="fas fa-info-circle text-info"></i> <strong>FLOTA</strong> - Tipo de flota (opcional)</li>
-                                <li><i class="fas fa-info-circle text-info"></i> <strong>CLASE</strong> - Clase del equipo (opcional)</li>
-                            </ul>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary btn-lg" id="uploadBtn">
-                            <i class="fas fa-upload"></i>
-                            Cargar y Procesar Datos
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="uploadBtn">
+                            <i class="fas fa-cogs"></i> Cargar y Procesar Archivo
                         </button>
                     </form>
+                    <!-- Contenedor de Progreso de Carga -->
+                    <div id="upload-progress-container" class="mt-4" style="display: none;">
+                        <h5 id="progress-title">Procesando archivo...</h5>
+                        <div class="progress" style="height: 25px;">
+                            <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        <div id="progress-message" class="mt-2 text-muted">Iniciando...</div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-    {% endif %}
 
-    <!-- Modal de Progreso de Carga -->
-    <div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true" data-bs-backdrop="static">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title" id="progressModalLabel">
-                        <i class="fas fa-upload fa-spin"></i>
-                        Cargando Archivo Excel
-                    </h5>
+    <!-- Sección de Selección de Análisis (inicialmente oculta) -->
+    <div id="analysisSelectionSection" class="row mb-4" style="display: none;">
+        <div class="col-12 text-center">
+            <div class="alert alert-success">
+                <h4 class="alert-heading"><i class="fas fa-check-circle"></i> ¡Archivo Cargado Exitosamente!</h4>
+                <p>El archivo <strong id="fileName"></strong> ha sido procesado. Ahora puede elegir el tipo de análisis que desea realizar.</p>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100 text-center">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <i class="fas fa-chart-pie fa-3x text-info mb-3"></i>
+                    <h5 class="card-title">Dashboard Estadístico</h5>
+                    <p class="card-text">Explore los KPIs históricos, analice tendencias pasadas y filtre los datos por mes para entender el rendimiento de su operación.</p>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-info mt-auto">Ver Análisis Histórico</a>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span id="currentTask" class="fw-bold">Iniciando carga...</span>
-                            <span id="progressPercent" class="badge bg-primary">0%</span>
-                        </div>
-                        <div class="progress mb-3" style="height: 25px;">
-                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
-                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                            </div>
-                        </div>
-                        <div id="progressMessage" class="text-muted">
-                            <i class="fas fa-info-circle"></i>
-                            Preparando para cargar tu archivo...
-                        </div>
-                    </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100 text-center">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <i class="fas fa-robot fa-3x text-danger mb-3"></i>
+                    <h5 class="card-title">Análisis Predictivo (IA)</h5>
+                    <p class="card-text">Utilice Machine Learning para predecir qué equipos tienen mayor probabilidad de fallar en el próximo mes y tome acciones preventivas.</p>
+                    <a href="{{ url_for('predictions') }}" class="btn btn-danger mt-auto">Realizar Predicciones</a>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                    <!-- Pasos del proceso - solo carga -->
-                    <div class="row">
-                        <div class="col-12">
-                            <h6 class="mb-3">Progreso de Carga:</h6>
-                            <div class="list-group">
-                                <div class="list-group-item d-flex align-items-center" id="step-1">
-                                    <div class="step-icon me-3">
-                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
-                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
-                                        <i class="fas fa-circle text-muted"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold">1. Validando archivo</div>
-                                        <small class="text-muted">Verificando formato y contenido</small>
-                                    </div>
-                                </div>
-                                <div class="list-group-item d-flex align-items-center" id="step-2">
-                                    <div class="step-icon me-3">
-                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
-                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
-                                        <i class="fas fa-circle text-muted"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold">2. Guardando archivo</div>
-                                        <small class="text-muted">Almacenando datos de manera segura</small>
-                                    </div>
-                                </div>
-                                <div class="list-group-item d-flex align-items-center" id="step-3">
-                                    <div class="step-icon me-3">
-                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
-                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
-                                        <i class="fas fa-circle text-muted"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold">3. Cargando en memoria</div>
-                                        <small class="text-muted">Preparando datos para análisis</small>
-                                    </div>
-                                </div>
-                                <div class="list-group-item d-flex align-items-center" id="step-4">
-                                    <div class="step-icon me-3">
-                                        <i class="fas fa-circle-notch fa-spin text-primary" style="display:none;"></i>
-                                        <i class="fas fa-check-circle text-success" style="display:none;"></i>
-                                        <i class="fas fa-circle text-muted"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold">4. Archivo listo</div>
-                                        <small class="text-muted">Listo para seleccionar tipo de análisis</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    <!-- Contenedor para Alertas/Errores -->
+    <div id="alertContainer" class="mt-4"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressMessage = document.getElementById('progress-message');
+    const alertContainer = document.getElementById('alertContainer');
+    let progressInterval;
+
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('file');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            showAlert('Por favor, seleccione un archivo.', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // UI changes for loading state
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Cargando...';
+        progressContainer.style.display = 'block';
+        alertContainer.innerHTML = '';
+
+        // Start polling for progress
+        progressInterval = setInterval(checkUploadProgress, 500);
+
+        fetch("{{ url_for('upload_file') }}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            clearInterval(progressInterval); // Stop polling
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.error || 'Error en la carga') });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Final progress update
+                updateProgressUI(100, '¡Archivo procesado!');
+                // Switch views
+                document.getElementById('uploadSection').style.display = 'none';
+                document.getElementById('analysisSelectionSection').style.display = 'flex';
+                document.getElementById('fileName').textContent = file.name;
+            } else {
+                throw new Error(data.error || 'El servidor indicó un fallo.');
+            }
+        })
+        .catch(error => {
+            console.error('Error en la carga:', error);
+            showAlert(`Error al cargar el archivo: ${error.message}`, 'danger');
+            resetUploadUI();
+        });
+    });
+
+    function checkUploadProgress() {
+        fetch("{{ url_for('get_progress') }}")
+            .then(response => response.json())
+            .then(data => {
+                if (data.is_processing) {
+                    updateProgressUI(data.progress, data.message);
+                } else if (data.error) {
+                    clearInterval(progressInterval);
+                    showAlert(`Error durante el procesamiento: ${data.error}`, 'danger');
+                    resetUploadUI();
+                }
+            })
+            .catch(error => {
+                console.error('Error obteniendo progreso:', error);
+                clearInterval(progressInterval);
+                showAlert('No se pudo obtener el estado del procesamiento.', 'warning');
+                resetUploadUI();
+            });
+    }
+
+    function updateProgressUI(percent, message) {
+        progressBar.style.width = `${percent}%`;
+        progressBar.setAttribute('aria-valuenow', percent);
+        progressBar.textContent = `${percent}%`;
+        progressMessage.textContent = message;
+    }
+
+    function resetUploadUI() {
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="fas fa-cogs"></i> Cargar y Procesar Archivo';
+        progressContainer.style.display = 'none';
+        updateProgressUI(0, 'Iniciando...');
+    }
+
+    function showAlert(message, type = 'danger') {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        alertContainer.append(wrapper);
+    }
+});
+</script>
+{% endblock %}
                     </div>
 
                     <div id="errorSection" class="alert alert-danger mt-3" style="display: none;">

@@ -26,122 +26,51 @@
         </div>
     </div>
 
-    <!-- Selector de Equipo -->
+    <!-- Panel de Control Principal -->
     <div class="row mb-4">
-        <div class="col-md-6">
+        <div class="col-12">
             <div class="card border-primary">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <i class="fas fa-cogs"></i> Selección de Equipo
+                        <i class="fas fa-cogs"></i> Panel de Control de Análisis Predictivo
                     </h5>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="equipoSelect" class="form-label">Equipo para Análisis Predictivo:</label>
-                        <select class="form-select" id="equipoSelect">
-                            <option value="">Seleccionar equipo...</option>
-                            <option value="CG-TC06">CG-TC06 - Camión Grúa</option>
-                            <option value="AH-ED03">AH-ED03 - Equipo Auxiliar</option>
-                            <option value="CV-CO02">CV-CO02 - Vibrocompactador</option>
-                            <option value="EX-TC15">EX-TC15 - Excavadora</option>
-                            <option value="NE-HB11">NE-HB11 - Neumático</option>
-                            <option value="RE-UN03">RE-UN03 - Rodillo</option>
-                            <option value="CV-UN04">CV-UN04 - Vibrocompactador</option>
-                            <option value="PE-CU03">PE-CU03 - Pala Excavadora</option>
-                            <option value="TI-EMCO05">TI-EMCO05 - Equipo Terracería</option>
-                            <option value="VD-CO50">VD-CO50 - Ventilador</option>
-                            <option value="VD-TC43">VD-TC43 - Ventilador</option>
-                            <option value="VD-CO17">VD-CO17 - Ventilador</option>
-                        </select>
+                <div class="card-body text-center">
+                    <p class="lead">
+                        Analice el archivo <strong>{{ file_name }}</strong> para identificar los equipos con mayor riesgo de falla.
+                    </p>
+                    <button type="button" class="btn btn-danger btn-lg" onclick="runFR30Analysis()" id="analisisBtn">
+                        <i class="fas fa-chart-bar"></i> Ejecutar Análisis de Riesgo de Falla (FR-30)
+                    </button>
+                    <div id="loadingSpinner" class="mt-3" style="display: none;">
+                        <div class="spinner-border text-danger" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="text-muted mt-2">Entrenando modelos y generando predicciones... Esto puede tardar un momento.</p>
                     </div>
-                    <button type="button" class="btn btn-primary" onclick="generatePrediction()">
-                        <i class="fas fa-chart-line"></i> Generar Predicción
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary ms-2" onclick="generateAllPredictions()">
-                        <i class="fas fa-layer-group"></i> Analizar Todos
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- FR-30 Top 5 Analysis -->
-        <div class="col-md-6">
-            <div class="card border-danger">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle"></i> FR-30 Top 5 Análisis
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="mesSelect" class="form-label">Filtro por Mes (Opcional):</label>
-                        <select class="form-select" id="mesSelect">
-                            <option value="">Todos los meses</option>
-                            <option value="1">Enero</option>
-                            <option value="2">Febrero</option>
-                            <option value="3">Marzo</option>
-                            <option value="4">Abril</option>
-                            <option value="5">Mayo</option>
-                            <option value="6">Junio</option>
-                            <option value="7">Julio</option>
-                            <option value="8">Agosto</option>
-                            <option value="9">Septiembre</option>
-                            <option value="10">Octubre</option>
-                            <option value="11">Noviembre</option>
-                            <option value="12">Diciembre</option>
-                        </select>
-                    </div>
-                    <button type="button" class="btn btn-danger" onclick="obtenerFR30Top5()">
-                        <i class="fas fa-chart-bar"></i> Generar FR-30 Top 5
-                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- FR-30 Top 5 Results -->
+    <!-- Resultados del Análisis FR-30 -->
     <div class="row mb-4" id="fr30Results" style="display: none;">
         <div class="col-12">
             <div class="card border-danger">
                 <div class="card-header bg-danger text-white">
                     <h5 class="mb-0">
-                        <i class="fas fa-chart-bar"></i> FR-30: Top 5 Equipos con Mayor Riesgo de Falla
+                        <i class="fas fa-exclamation-triangle"></i> Resultados del Análisis de Riesgo de Falla (FR-30)
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-lg-8">
-                            <div id="fr30Chart"></div>
+                        <div class="col-lg-8 mb-3 mb-lg-0">
+                            <div id="fr30Chart" style="min-height: 400px;"></div>
                         </div>
                         <div class="col-lg-4">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">Resumen de Análisis</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <strong>Total Equipos Analizados:</strong>
-                                        <span id="totalEquipos" class="badge bg-info">-</span>
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Promedio de Riesgo:</strong>
-                                        <span id="promedioRiesgo" class="badge bg-warning">-</span>
-                                    </div>
-                                    <h6>Detalles Top 5:</h6>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm">
-                                            <thead>
-                                                <tr>
-                                                    <th>Equipo</th>
-                                                    <th>Riesgo</th>
-                                                    <th>Estado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="fr30Details">
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                            <h6 class="text-center">Top 5 Equipos con Mayor Riesgo</h6>
+                            <div id="fr30Details" class="list-group">
+                                <!-- Los detalles se insertarán aquí dinámicamente -->
                             </div>
                         </div>
                     </div>
@@ -150,54 +79,113 @@
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card border-primary">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-cogs"></i> Análisis Individual de Equipo
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">Seleccione un equipo arriba para análisis detallado...</p>
-                </div>
-            </div>
-        </div>
+    <!-- Contenedor para Alertas/Errores -->
+    <div id="alertContainer"></div>
 
-        <!-- Estado del Sistema ML -->
-        <div class="col-md-6">
-            <div class="card border-info">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-brain"></i> Estado del Sistema ML
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-6">
-                            <div class="mb-2">
-                                {% if models_trained %}
-                                    <i class="fas fa-check-circle text-success fa-2x"></i>
-                                    <p class="mb-0 mt-1"><small>Modelos Entrenados</small></p>
-                                {% else %}
-                                    <i class="fas fa-times-circle text-danger fa-2x"></i>
-                                    <p class="mb-0 mt-1"><small>Entrenamiento Requerido</small></p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="mb-2">
-                                {% if ml_available %}
-                                    <i class="fas fa-microchip text-primary fa-2x"></i>
-                                    <p class="mb-0 mt-1"><small>IA Disponible</small></p>
-                                {% else %}
-                                    <i class="fas fa-exclamation-triangle text-warning fa-2x"></i>
-                                    <p class="mb-0 mt-1"><small>Modo Básico</small></p>
-                                {% endif %}
-                            </div>
-                        </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+function showAlert(message, type = 'danger') {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+    alertContainer.innerHTML = alertHTML;
+}
+
+function runFR30Analysis() {
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const analisisBtn = document.getElementById('analisisBtn');
+    const resultsContainer = document.getElementById('fr30Results');
+
+    // Mostrar spinner y deshabilitar botón
+    loadingSpinner.style.display = 'block';
+    analisisBtn.disabled = true;
+    analisisBtn.innerHTML = '<i class="fas fa-cogs fa-spin"></i> Procesando...';
+    resultsContainer.style.display = 'none'; // Ocultar resultados anteriores
+    document.getElementById('alertContainer').innerHTML = ''; // Limpiar alertas
+
+    fetch('/analyze-fr30', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error || 'Error desconocido en el servidor') });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            displayFR30Results(data);
+            resultsContainer.style.display = 'block';
+        } else {
+            showAlert(data.error || 'Ocurrió un error al procesar la solicitud.');
+        }
+    })
+    .catch(error => {
+        console.error('Error en el análisis FR-30:', error);
+        showAlert(`Error crítico: ${error.message}`);
+    })
+    .finally(() => {
+        // Ocultar spinner y rehabilitar botón
+        loadingSpinner.style.display = 'none';
+        analisisBtn.disabled = false;
+        analisisBtn.innerHTML = '<i class="fas fa-chart-bar"></i> Ejecutar Análisis de Riesgo de Falla (FR-30)';
+    });
+}
+
+function displayFR30Results(data) {
+    const chartContainer = document.getElementById('fr30Chart');
+    const detailsContainer = document.getElementById('fr30Details');
+    
+    // Limpiar contenedores
+    chartContainer.innerHTML = '';
+    detailsContainer.innerHTML = '';
+
+    // Renderizar Gráfico Plotly
+    if (data.graph_json) {
+        const graphData = JSON.parse(data.graph_json);
+        Plotly.newPlot(chartContainer, graphData.data, graphData.layout, {responsive: true});
+    }
+
+    // Mostrar detalles del Top 5
+    if (data.results && data.results.length > 0) {
+        data.results.forEach(item => {
+            const riskLevel = getRiskLevel(item.risk);
+            const detailItem = `
+                <a href="#" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">${item.equipo}</h5>
+                        <span class="badge bg-${riskLevel.color} rounded-pill">${riskLevel.label}</span>
                     </div>
-                    <hr>
+                    <p class="mb-1">Probabilidad de Falla: <strong>${item.risk_percent}</strong></p>
+                    <small class="text-muted">Factores de riesgo principales: ${item.factors || 'No detallados'}</small>
+                </a>
+            `;
+            detailsContainer.innerHTML += detailItem;
+        });
+    } else {
+        detailsContainer.innerHTML = '<p class="text-center text-muted">No se encontraron equipos con riesgo significativo.</p>';
+    }
+}
+
+function getRiskLevel(risk) {
+    if (risk > 0.75) return { label: 'Crítico', color: 'danger' };
+    if (risk > 0.50) return { label: 'Alto', color: 'warning' };
+    if (risk > 0.25) return { label: 'Medio', color: 'info' };
+    return { label: 'Bajo', color: 'success' };
+}
+</script>
+{% endblock %}
                     <div class="text-center">
                         <small class="text-muted">
                             Algoritmos: RandomForest, Isolation Forest, Linear Regression

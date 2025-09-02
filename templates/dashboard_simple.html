@@ -48,56 +48,13 @@
         <div class="col-md-6">
             <div class="card border-info h-100">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="fas fa-brain"></i> Estado del Sistema IA</h5>
+                    <h5 class="mb-0"><i class="fas fa-brain"></i> Análisis Predictivo IA</h5>
                 </div>
-                <div class="card-body" id="mlStatusContainer">
-                    <!-- Estado Inicial: Listo para analizar -->
-                    <div id="mlInitialState">
-                        <div class="alert alert-info">
-                            <i class="fas fa-file-alt"></i> <strong>Archivo cargado.</strong><br>
-                            <small>Para obtener predicciones precisas, los modelos de IA deben ser entrenados con sus datos.</small>
-                        </div>
-                        <div class="d-grid">
-                            <button onclick="startDeepAnalysis()" class="btn btn-success">
-                                <i class="fas fa-rocket"></i> Iniciar Análisis Profundo (Entrenar IA)
-                            </button>
-                        </div>
-                        <p class="text-muted small mt-2">Este proceso se ejecuta en segundo plano y puede tardar varios minutos. Podrás seguir usando la app.</p>
-                    </div>
-
-                    <!-- Estado de Entrenamiento: En progreso -->
-                    <div id="mlTrainingState" style="display: none;">
-                        <div class="alert alert-warning">
-                            <i class="fas fa-cogs fa-spin"></i> <strong>Entrenando Modelos de IA...</strong>
-                        </div>
-                        <div class="progress" style="height: 25px;">
-                            <div id="mlProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                                <strong id="mlProgressText">0%</strong>
-                            </div>
-                        </div>
-                        <p id="mlProgressStep" class="text-center mt-2 mb-0">Iniciando...</p>
-                    </div>
-
-                    <!-- Estado Entrenado: Listo para predicciones -->
-                    <div id="mlTrainedState" style="display: none;">
-                        <div class="alert alert-success text-center">
-                            <i class="fas fa-robot fa-2x mb-2"></i><br>
-                            <strong>¡Análisis Profundo Completo!</strong><br>
-                            <small>Los modelos de IA han sido entrenados y están listos para generar KPIs predictivos.</small>
-                        </div>
-                        <p class="text-muted small text-center">Ahora puedes seleccionar un mes y presionar "Analizar KPIs" para usar los modelos entrenados.</p>
-                    </div>
-
-                    <!-- Estado de Error -->
-                    <div id="mlErrorState" style="display: none;">
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-triangle"></i> <strong>Error en el Análisis</strong><br>
-                            <small id="mlErrorMessage">Ocurrió un error inesperado.</small>
-                        </div>
-                        <button onclick="startDeepAnalysis()" class="btn btn-primary btn-sm">
-                            <i class="fas fa-redo"></i> Reintentar Análisis
-                        </button>
-                    </div>
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <p>Nuestros modelos de Machine Learning ahora operan en una página dedicada para un análisis más claro y potente.</p>
+                    <a href="{{ url_for('predictions') }}" class="btn btn-info">
+                        <i class="fas fa-rocket"></i> Ir a la Página de Predicciones
+                    </a>
                 </div>
             </div>
         </div>
@@ -124,121 +81,10 @@
 
 {% block extra_js %}
 <script>
-let mlStatusInterval = null;
-
-document.addEventListener('DOMContentLoaded', function() {
-    checkMlStatus(); // Verificar estado al cargar la página
-});
-
-function setMlUiState(state, data = {}) {
-    document.getElementById('mlInitialState').style.display = 'none';
-    document.getElementById('mlTrainingState').style.display = 'none';
-    document.getElementById('mlTrainedState').style.display = 'none';
-    document.getElementById('mlErrorState').style.display = 'none';
-
-    switch (state) {
-        case 'initial':
-            document.getElementById('mlInitialState').style.display = 'block';
-            break;
-        case 'training':
-            document.getElementById('mlTrainingState').style.display = 'block';
-            const progress = data.ml_progress || { percent: 0, step: 'Iniciando...' };
-            updateMlProgress(progress.percent, progress.step);
-            break;
-        case 'trained':
-            document.getElementById('mlTrainedState').style.display = 'block';
-            break;
-        case 'error':
-            document.getElementById('mlErrorState').style.display = 'block';
-            document.getElementById('mlErrorMessage').textContent = data.ml_progress ? data.ml_progress.step : 'Error desconocido.';
-            break;
-    }
-}
-
-function updateMlProgress(percent, step) {
-    const progressBar = document.getElementById('mlProgressBar');
-    const progressText = document.getElementById('mlProgressText');
-    const progressStep = document.getElementById('mlProgressStep');
-
-    progressBar.style.width = `${percent}%`;
-    progressBar.setAttribute('aria-valuenow', percent);
-    progressText.textContent = `${percent}%`;
-    progressStep.textContent = step;
-}
-
-function checkMlStatus() {
-    fetch('/ml-status')
-        .then(response => response.json())
-        .then(data => {
-            if (data.deep_analysis_in_progress) {
-                setMlUiState('training', data);
-                if (!mlStatusInterval) {
-                    mlStatusInterval = setInterval(checkMlStatus, 2000); // Poll every 2 seconds
-                }
-            } else if (data.ml_models_trained) {
-                setMlUiState('trained');
-                if (mlStatusInterval) {
-                    clearInterval(mlStatusInterval);
-                    mlStatusInterval = null;
-                }
-            } else if (data.ml_progress && data.ml_progress.step && data.ml_progress.step.toLowerCase().includes('error')) {
-                setMlUiState('error', data);
-                 if (mlStatusInterval) {
-                    clearInterval(mlStatusInterval);
-                    mlStatusInterval = null;
-                }
-            }
-            else {
-                setMlUiState('initial');
-                if (mlStatusInterval) {
-                    clearInterval(mlStatusInterval);
-                    mlStatusInterval = null;
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error checking ML status:', error);
-            setMlUiState('error', { ml_progress: { step: 'No se pudo conectar con el servidor.' } });
-            if (mlStatusInterval) {
-                clearInterval(mlStatusInterval);
-                mlStatusInterval = null;
-            }
-        });
-}
-
-function startDeepAnalysis() {
-    setMlUiState('training', { ml_progress: { percent: 1, step: 'Enviando solicitud...' } });
-
-    fetch('/deep-analysis', { method: 'POST' })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw new Error(err.message || 'Error en el servidor') });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.status === 'success') {
-                if (!mlStatusInterval) {
-                    mlStatusInterval = setInterval(checkMlStatus, 2000);
-                }
-            } else {
-                throw new Error(data.message || 'Falló al iniciar el análisis.');
-            }
-        })
-        .catch(error => {
-            console.error('Error starting deep analysis:', error);
-            setMlUiState('error', { ml_progress: { step: error.message } });
-            if (mlStatusInterval) {
-                clearInterval(mlStatusInterval);
-                mlStatusInterval = null;
-            }
-        });
-}
-
 function analizarMes() {
     const mes = document.getElementById('mesSelector').value;
     if (!mes) {
-        alert('Por favor, selecciona un mes para el análisis.');
+        showToast('Por favor, selecciona un mes para el análisis.', 'warning');
         return;
     }
 
@@ -249,8 +95,7 @@ function analizarMes() {
             <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                 <span class="visually-hidden">Analizando...</span>
             </div>
-            <p class="mt-3 mb-0">Ejecutando modelos de IA para <strong>${mes}</strong>...</p>
-            <p class="text-muted small">Esto puede tardar unos segundos.</p>
+            <p class="mt-3 mb-0">Calculando KPIs estadísticos para <strong>${mes}</strong>...</p>
         </div>
     `;
     
