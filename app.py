@@ -1278,10 +1278,21 @@ else:
 
 @app.route('/')
 def index():
+    # Obtener stats del global_data o crear stats por defecto
+    stats = global_data.get('stats', {
+        'total_registros': 0,
+        'processing_time': 0,
+        'sheet_used': None,
+        'fr30_count': 0,
+        'registros_cerrados': 0,
+        'registros_abiertos': 0
+    })
+    
     return render_template('index.html', 
                          data_loaded=global_data['df'] is not None,
                          processed_date=global_data.get('processed_date'),
-                         ml_available=ML_AVAILABLE)
+                         ml_available=ML_AVAILABLE,
+                         stats=stats)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
