@@ -2104,7 +2104,7 @@ def real_ml_insights():
         })
 
 @app.route('/api/progress')
-def get_progress():
+def api_get_progress():
     """API endpoint para obtener el estado de progreso de carga y entrenamiento"""
     return jsonify(progress_state)
 
