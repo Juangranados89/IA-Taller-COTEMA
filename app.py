@@ -1591,153 +1591,103 @@ def dashboard():
 
 @app.route('/kpis/<mes>')
 def calculate_kpis(mes):
+    """
+    Calcula los KPIs para un mes específico utilizando los datos reales cargados.
+    Filtra el DataFrame global por el mes seleccionado y calcula las métricas.
+    """
     try:
-        # Verificación más robusta de los datos
-        if (global_data['df'] is None or 
-            not hasattr(global_data['df'], 'columns') or 
-            len(global_data['df']) == 0):
+        # 1. VERIFICAR DATOS
+        df = global_data.get('df')
+        if df is None or df.empty:
             return jsonify({'error': 'No hay datos cargados. Por favor, carga un archivo Excel primero.'}), 400
+
+        # 2. FILTRAR DATOS POR MES
+        # Asegurar que la columna de fecha existe y es de tipo datetime
+        if 'fecha_in' not in df.columns:
+            return jsonify({'error': "La columna 'fecha_in' es requerida y no se encontró."}), 400
         
-        # Usar códigos reales de equipos desde el motor ML
-        equipos = ml_engine.load_real_equipment_codes()
-        if not equipos:
-            # Fallback si no hay códigos reales
-            equipos = ['CG-TC06', 'AH-ED03', 'CV-CO02', 'EX-TC15', 'NE-HB11']
+        df['fecha_in'] = pd.to_datetime(df['fecha_in'], errors='coerce')
         
-        print(f"🔧 Calculando KPIs para {len(equipos)} equipos reales del mes {mes}")
-        
+        # Parsear el mes de la URL (formato YYYY-MM)
+        try:
+            start_date = datetime.strptime(mes, '%Y-%m')
+            end_date = (start_date + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
+        except ValueError:
+            return jsonify({'error': 'Formato de mes inválido. Use YYYY-MM.'}), 400
+
+        # Filtrar el DataFrame para el mes seleccionado
+        df_month = df[(df['fecha_in'] >= start_date) & (df['fecha_in'] <= end_date)].copy()
+
+        if df_month.empty:
+            return jsonify({
+                'mes': mes,
+                'total_equipos': 0,
+                'kpis': {},
+                'message': 'No se encontraron registros para el mes seleccionado.'
+            })
+
+        # 3. CALCULAR KPIs CON DATOS REALES
         kpis = {'fr30': {}, 'rul': {}, 'forecast': {}, 'anomaly': {}}
         
-        # Si ML está disponible, usar predicciones reales
-        if ML_AVAILABLE and ml_engine and ml_engine.is_trained:
-            for equipo in equipos:
-                # Datos simulados del equipo
-                equipo_data = {
-                    'temperatura': np.random.normal(75, 10),
-                    'vibracion': np.random.exponential(2.5),
-                    'horas_operacion': np.random.uniform(8, 16),
-                    'ciclos_trabajo': np.random.poisson(150),
-                    'dia_año': datetime.now().timetuple().tm_yday
-                }
-                
-                # Predicción ML
-                prediction = ml_engine.predict_equipment(equipo_data)
-                
-                if prediction:
-                    # FR-30
-                    risk = prediction['fr30_risk']
-                    banda = '🟢 BAJO' if risk < 0.25 else ('🟠 MEDIO' if risk < 0.50 else '🔴 ALTO')
-                    banda_color = 'success' if risk < 0.25 else ('warning' if risk < 0.50 else 'danger')
-                    
-                    kpis['fr30'][equipo] = {
-                        'risk_30d': round(risk, 3),
-                        'risk_percentage': f"{round(risk * 100, 1)}%",
-                        'status': banda,
-                        'badge_color': banda_color,
-                        'confidence': round(prediction['confidence'], 2),
-                        'explicacion': f'RandomForest ML - Predicción para {equipo}'
-                    }
-                    
-                    # RUL
-                    rul_days = prediction['rul_days']
-                    kpis['rul'][equipo] = {
-                        'rul50_d': rul_days,
-                        'rul90_d': int(rul_days * 0.7),
-                        'confidence': round(prediction['confidence'], 2),
-                        'explicacion': f'ML Regression - Vida útil para {equipo}'
-                    }
-                    
-                    # Anomaly
-                    anomaly = prediction['anomaly_score']
-                    anomaly_norm = (anomaly + 1) / 2  # Normalizar a 0-1
-                    status = '🟢 NORMAL' if anomaly_norm < 0.3 else ('🟡 ATENCIÓN' if anomaly_norm < 0.6 else '🔴 CRÍTICO')
-                    color = 'success' if anomaly_norm < 0.3 else ('warning' if anomaly_norm < 0.6 else 'danger')
-                    
-                    kpis['anomaly'][equipo] = {
-                        'anomaly_score': round(anomaly_norm, 2),
-                        'status': status,
-                        'badge_color': color,
-                        'explicacion': f'Isolation Forest - Detección anomalías {equipo}'
-                    }
-                    
-                    # Forecast (usar datos de tendencia)
-                    trend_data = ml_engine.generate_trend_forecast(equipo, 7)
-                    if trend_data:
-                        forecast_7d = np.mean([d['riesgo'] for d in trend_data['pronostico'][:7]]) * 100
-                        forecast_30d = forecast_7d * 4.2
-                        
-                        kpis['forecast'][equipo] = {
-                            'forecast_7d': round(forecast_7d, 1),
-                            'forecast_30d': round(forecast_30d, 1),
-                            'trend_direction': 'Ascendente' if forecast_7d > 20 else 'Estable',
-                            'explicacion': f'ML Time Series - Pronóstico para {equipo}'
-                        }
-        else:
-            # Fallback con datos simulados mejorados
-            import random
-            import hashlib
-            
-            seed_hash = int(hashlib.md5(mes.encode()).hexdigest()[:8], 16) % 10000
-            random.seed(seed_hash)
-            
-            for equipo in equipos:
-                # Simulación mejorada con más variabilidad
-                base_risk = random.uniform(0.05, 0.65)
-                banda = '🟢 BAJO' if base_risk < 0.25 else ('🟠 MEDIO' if base_risk < 0.50 else '🔴 ALTO')
-                banda_color = 'success' if base_risk < 0.25 else ('warning' if base_risk < 0.50 else 'danger')
-                
-                kpis['fr30'][equipo] = {
-                    'risk_30d': round(base_risk, 3),
-                    'risk_percentage': f"{round(base_risk * 100, 1)}%",
-                    'status': banda,
-                    'badge_color': banda_color,
-                    'confidence': round(random.uniform(0.75, 0.95), 2),
-                    'explicacion': f'Simulación estadística - {equipo}'
-                }
-                
-                # RUL simulado
-                rul_50 = random.randint(15, 120)
-                kpis['rul'][equipo] = {
-                    'rul50_d': rul_50,
-                    'rul90_d': int(rul_50 * 0.7),
-                    'confidence': round(random.uniform(0.70, 0.90), 2),
-                    'explicacion': f'Estimación estadística - {equipo}'
-                }
-                
-                # Forecast simulado
-                forecast_7d = random.uniform(15, 85)
-                kpis['forecast'][equipo] = {
-                    'forecast_7d': round(forecast_7d, 1),
-                    'forecast_30d': round(forecast_7d * 4.2, 1),
-                    'trend_direction': 'Ascendente' if forecast_7d > 40 else 'Estable',
-                    'explicacion': f'Proyección estadística - {equipo}'
-                }
-                
-                # Anomaly simulado
-                anomaly_score = random.uniform(0.1, 0.8)
-                status = '🟢 NORMAL' if anomaly_score < 0.3 else ('🟡 ATENCIÓN' if anomaly_score < 0.6 else '🔴 CRÍTICO')
-                color = 'success' if anomaly_score < 0.3 else ('warning' if anomaly_score < 0.6 else 'danger')
-                
-                kpis['anomaly'][equipo] = {
-                    'anomaly_score': round(anomaly_score, 2),
-                    'status': status,
-                    'badge_color': color,
-                    'explicacion': f'Detección estadística - {equipo}'
-                }
+        # Columnas necesarias para los cálculos
+        dias_taller_col = 'con.in.taller'
         
+        # Calcular el promedio de días en taller para el mes (para anomalías)
+        avg_dias_taller_mes = df_month[dias_taller_col].mean() if dias_taller_col in df_month.columns else 0
+
+        equipos_del_mes = df_month['codigo'].unique()
+
+        for equipo in equipos_del_mes:
+            equipo_df = df_month[df_month['codigo'] == equipo]
+            
+            # --- KPI: FR-30 (Frecuencia de Reingreso como proxy) ---
+            num_ingresos = len(equipo_df)
+            # Lógica simple: más de 1 ingreso en el mes es una alerta
+            risk = 0.1 if num_ingresos == 1 else (0.5 if num_ingresos == 2 else 0.8)
+            banda = '🟢 BAJO' if risk < 0.4 else ('🟠 MEDIO' if risk < 0.7 else '🔴 ALTO')
+            banda_color = 'success' if risk < 0.4 else ('warning' if risk < 0.7 else 'danger')
+            kpis['fr30'][equipo] = {
+                'risk_30d': risk,
+                'risk_percentage': f"{int(risk * 100)}%",
+                'status': banda,
+                'badge_color': banda_color,
+                'explicacion': f'{num_ingresos} ingreso(s) en {mes}'
+            }
+
+            # --- KPI: Detección de Anomalías (basado en días en taller) ---
+            dias_en_taller = equipo_df[dias_taller_col].mean() if dias_taller_col in equipo_df.columns else 0
+            # Lógica simple: si los días en taller del equipo son > 50% del promedio del mes
+            anomaly_score = 0
+            if avg_dias_taller_mes > 0:
+                anomaly_score = dias_en_taller / avg_dias_taller_mes
+            
+            status = '🟢 NORMAL' if anomaly_score < 1.2 else ('🟡 ATENCIÓN' if anomaly_score < 1.8 else '🔴 CRÍTICO')
+            color = 'success' if anomaly_score < 1.2 else ('warning' if anomaly_score < 1.8 else 'danger')
+            kpis['anomaly'][equipo] = {
+                'anomaly_score': round(anomaly_score, 2),
+                'status': status,
+                'badge_color': color,
+                'explicacion': f'Días en taller: {dias_en_taller:.1f} vs prom. mes: {avg_dias_taller_mes:.1f}'
+            }
+
+            # --- KPIs de RUL y Forecast (placeholders, requieren modelos más complejos) ---
+            kpis['rul'][equipo] = {'rul50_d': 'N/A', 'explicacion': 'Requiere modelo ML'}
+            kpis['forecast'][equipo] = {'forecast_7d': 'N/A', 'explicacion': 'Requiere modelo ML'}
+
         result = {
             'mes': mes,
-            'total_equipos': len(equipos),
+            'total_equipos': len(equipos_del_mes),
             'timestamp': datetime.now().isoformat(),
-            'processing_method': 'ML Avanzado' if ML_AVAILABLE else 'Estadístico',
-            'ml_models_active': ML_AVAILABLE and ml_engine and ml_engine.is_trained,
+            'processing_method': 'Análisis Estadístico Directo',
+            'ml_models_active': False, # Indicar que son cálculos estadísticos
             'kpis': kpis
         }
         
         return jsonify(result)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logging.exception(f"Error en calculate_kpis para el mes {mes}")
+        return jsonify({'error': f'Error interno del servidor: {str(e)}'}), 500
 
 @app.route('/ml/prediction', methods=['POST'])
 def ml_prediction():
