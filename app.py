@@ -1550,8 +1550,8 @@ def dashboard():
         logging.info(f"DataFrame loaded with {len(df)} rows and columns: {list(df.columns)}")
 
         # --- Cálculo de meses para el selector (punto común de error) ---
-        # Asumimos que la columna de fecha se llama 'fecha_ingreso' después de la estandarización
-        date_column = 'fecha_ingreso' # Reemplaza con el nombre estandarizado real de tu columna de fecha
+        # La columna de fecha estandarizada es 'fecha_in'
+        date_column = 'fecha_in'
         months = []
         if date_column in df.columns:
             # Convertir a datetime, forzando errores a NaT (Not a Time)
