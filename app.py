@@ -1,4 +1,3 @@
-
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from datetime import datetime, timedelta
 import os
@@ -9,11 +8,11 @@ import hashlib
 import math
 import logging
 import threading
+from cotema_processor import process_cotema_data
 
 # Inicialización de la aplicación Flask
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-
 @app.route('/ml-status')
 def ml_status():
     """Devuelve el estado del análisis profundo y el entrenamiento ML."""
@@ -301,6 +300,7 @@ class COTEMAMLEngine:
                         'rul_estimado': rul_days,
                         'dia_año': day
                     })
+            
             
             return pd.DataFrame(data)
             
@@ -1352,105 +1352,78 @@ def upload_file():
 
 
 def process_uploaded_file(filepath, filename):
-    """Procesa el archivo subido en background con límites estrictos para Render."""
-    logging.info(f"process_uploaded_file started for {filename}")
+    """Procesa el archivo subido con lógica inteligente de lectura y COTEMA processor."""
+    logging.info(f"🔄 Iniciando procesamiento inteligente para {filename}")
     import time
     start_time = time.time()
-    max_processing_time = 20  # máximo 20 segundos para evitar timeout
     
     try:
-        update_progress("Cargando archivo", 3, 4, "Procesando archivo en background...")
+        update_progress("Analizando archivo", 1, 4, "Inspeccionando estructura del Excel...")
 
         if not pd:
             raise ImportError("La librería pandas no está instalada en el servidor.")
 
-        df = None
-        logging.info("Starting fast pandas read with strict limits for Render...")
-
-        # ESTRATEGIA RÁPIDA: Solo pandas con límites muy estrictos
-        try:
-            # Intento 1: Más específico y rápido
-            df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, usecols='B:Y', 
-                             engine='openpyxl', nrows=3000)  # máximo 3000 filas
-            logging.info(f"✅ Fast pandas read success. Shape: {df.shape}")
-            
-        except Exception as e1:
-            logging.warning(f"Attempt 1 failed: {e1}")
-            # Verificar tiempo límite
-            if time.time() - start_time > max_processing_time:
-                raise TimeoutError("Processing timeout exceeded")
-                
-            try:
-                # Intento 2: Menos específico pero con límites
-                df = pd.read_excel(filepath, sheet_name='REG', skiprows=4, 
-                                 engine='openpyxl', nrows=3000)
-                logging.info(f"✅ Pandas read attempt 2 success. Shape: {df.shape}")
-                
-            except Exception as e2:
-                logging.warning(f"Attempt 2 failed: {e2}")
-                # Verificar tiempo límite
-                if time.time() - start_time > max_processing_time:
-                    raise TimeoutError("Processing timeout exceeded")
-                    
-                try:
-                    # Intento 3: Mínimo viable
-                    df = pd.read_excel(filepath, engine='openpyxl', nrows=1500)
-                    logging.info(f"✅ Pandas read attempt 3 success. Shape: {df.shape}")
-                    
-                except Exception as e3:
-                    logging.error(f"All attempts failed: {e3}")
-                    # Crear DataFrame mínimo para no fallar completamente
-                    df = pd.DataFrame({
-                        'equipo': ['DEMO-001', 'DEMO-002', 'DEMO-003'],
-                        'fecha': [datetime.now().date()] * 3,
-                        'estado': ['Operativo'] * 3
-                    })
-                    logging.info("Created minimal fallback DataFrame")
-
-        # Verificar tiempo antes de continuar
-        if time.time() - start_time > max_processing_time:
-            raise TimeoutError("Processing timeout exceeded before normalization")
-
-        # Normalización rápida
-        if df is not None:
-            try:
-                df = sanitize_column_names(df)
-                df = df.dropna(how='all')
-                # Limitar a máximo 3000 filas para seguridad
-                if len(df) > 3000:
-                    df = df.head(3000)
-                    logging.info("DataFrame truncated to 3000 rows for memory safety")
-                    
-                logging.info(f"Final DataFrame shape: {df.shape}")
-                
-            except Exception as e_norm:
-                logging.warning(f"Normalization failed: {e_norm}")
-
-        # Almacenar con datos mínimos
-        global_data['df'] = df
+        # ESTRATEGIA INTELIGENTE: Inspeccionar primero, luego leer
+        logging.info("🔍 Inspeccionando hojas disponibles en el archivo Excel...")
+        
+        # Paso 1: Inspeccionar hojas sin cargar datos
+        xl_file = pd.ExcelFile(filepath, engine='openpyxl')
+        available_sheets = xl_file.sheet_names
+        logging.info(f"📋 Hojas encontradas: {available_sheets}")
+        
+        # Paso 2: Determinar qué hoja usar (prioridad: Datos_Limpios > primera hoja)
+        target_sheet = None
+        if 'Datos_Limpios' in available_sheets:
+            target_sheet = 'Datos_Limpios'
+            logging.info("✅ Usando hoja prioritaria: 'Datos_Limpios'")
+        else:
+            target_sheet = available_sheets[0]
+            logging.info(f"⚠️ 'Datos_Limpios' no encontrada. Usando primera hoja: '{target_sheet}'")
+        
+        update_progress("Cargando datos", 2, 4, f"Leyendo hoja '{target_sheet}'...")
+        
+        # Paso 3: Leer la hoja seleccionada
+        df_raw = pd.read_excel(filepath, sheet_name=target_sheet, engine='openpyxl')
+        logging.info(f"✅ Excel cargado exitosamente. Shape: {df_raw.shape}")
+        
+        update_progress("Procesando con COTEMA", 3, 4, "Normalizando datos con procesador especializado...")
+        
+        # Paso 4: Procesar con el agente especializado COTEMA
+        dataset, quality_report, catalogos = process_cotema_data(df_raw)
+        
+        # Paso 5: Almacenar datos procesados
+        global_data['df'] = pd.DataFrame(dataset)  # Para compatibilidad con código existente
+        global_data['dataset_normalizado'] = dataset
+        global_data['reporte_calidad'] = quality_report
+        global_data['catalogos'] = catalogos
         global_data['file_path'] = filepath
         global_data['file_name'] = filename
         global_data['processed_date'] = datetime.now()
         global_data['ml_models_trained'] = False
 
-        basic_stats = {
-            'total_registros': len(df) if df is not None else 0,
-            'columnas_total': len(df.columns) if df is not None else 0,
+        processing_time = round(time.time() - start_time, 2)
+        
+        # Estadísticas mejoradas
+        enhanced_stats = {
+            'total_registros': quality_report['total_registros'],
+            'registros_abiertos': quality_report['registros_abiertos'],
+            'registros_cerrados': quality_report['registros_cerrados'],
+            'errores_detectados': sum(quality_report['errores'].values()),
+            'catalogos_generados': len(catalogos),
+            'sheet_used': target_sheet,
+            'available_sheets': available_sheets,
             'file_loaded': True,
-            'needs_analysis': True,
-            'processing_time': round(time.time() - start_time, 2)
+            'cotema_processed': True,
+            'processing_time': processing_time
         }
-        global_data['stats'] = basic_stats
+        global_data['stats'] = enhanced_stats
 
-        update_progress("Archivo cargado", 4, 4, f"Archivo {filename} procesado en {basic_stats['processing_time']}s.")
-        logging.info(f"File {filename} processed successfully in {basic_stats['processing_time']}s. Rows: {len(df) if df is not None else 0}")
+        update_progress("Procesamiento completo", 4, 4, f"COTEMA procesado en {processing_time}s. {len(dataset)} registros normalizados.")
+        logging.info(f"✅ COTEMA processing completado para {filename} en {processing_time}s.")
 
-    except TimeoutError as e:
-        logging.error(f"Processing timeout for {filename}: {e}")
-        set_progress_error(f"Timeout procesando {filename} - archivo muy grande para Render")
     except Exception as e:
-        logging.exception(f"Error in process_uploaded_file: {e}")
-        set_progress_error(f"Error procesando archivo en background: {e}")
+        logging.exception(f"❌ Error en process_uploaded_file: {e}")
+        set_progress_error(f"Error procesando archivo: {str(e)}")
 
 @app.route('/quick-analysis', methods=['POST'])
 def quick_analysis():
@@ -2140,6 +2113,199 @@ def retrain_models():
 def train_progress():
     """Devuelve el progreso actual del entrenamiento de modelos"""
     return jsonify(progress_state)
+
+# 🚀 NUEVAS RUTAS PARA "OPERACIÓN CLARIDAD"
+
+@app.route('/analyze_statistics', methods=['POST'])
+def analyze_statistics():
+    """Ejecuta análisis estadístico especializado en FR-30"""
+    try:
+        if not global_data.get('df') is not None or global_data['df'].empty:
+            return jsonify({'error': 'No hay datos cargados para analizar'}), 400
+        
+        logging.info("🔍 Iniciando análisis estadístico FR-30...")
+        
+        # Importar el análisis específico de FR-30
+        from cotema_processor import get_fr30_analysis
+        
+        df = global_data['df']
+        
+        # Análisis FR-30 especializado
+        fr30_results = get_fr30_analysis(df)
+        
+        # Estadísticas generales mejoradas
+        estadisticas = {
+            'resumen_general': {
+                'total_registros': len(df),
+                'columnas_disponibles': list(df.columns),
+                'periodo_datos': {
+                    'registros_con_fecha': df['fecha'].notna().sum() if 'fecha' in df.columns else 0
+                }
+            },
+            'analisis_fr30': fr30_results,
+            'kpis_calculados': True,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Almacenar resultados
+        global_data['statistical_analysis'] = estadisticas
+        
+        logging.info("✅ Análisis estadístico FR-30 completado")
+        
+        return jsonify({
+            'success': True,
+            'data': estadisticas,
+            'message': 'Análisis estadístico FR-30 completado exitosamente'
+        })
+        
+    except Exception as e:
+        logging.error(f"❌ Error en análisis estadístico: {e}")
+        return jsonify({'error': f'Error en análisis estadístico: {str(e)}'}), 500
+
+@app.route('/ml_analysis', methods=['POST'])
+def ml_analysis():
+    """Ejecuta análisis completo de Machine Learning"""
+    try:
+        if not global_data.get('df') is not None or global_data['df'].empty:
+            return jsonify({'error': 'No hay datos cargados para análisis ML'}), 400
+        
+        if not ML_AVAILABLE:
+            return jsonify({'error': 'Motor ML no disponible en este servidor'}), 500
+        
+        logging.info("🤖 Iniciando análisis completo de ML...")
+        
+        df = global_data['df']
+        
+        # Entrenar modelos si no están entrenados
+        if not global_data.get('ml_models_trained', False):
+            success = ml_engine.train_models(df)
+            if success:
+                global_data['ml_models_trained'] = True
+            else:
+                return jsonify({'error': 'Error entrenando modelos ML'}), 500
+        
+        # Ejecutar análisis completo
+        resultados_ml = {
+            'fr30_predictions': {},
+            'rul_analysis': {},
+            'anomaly_detection': {},
+            'model_performance': {}
+        }
+        
+        # FR-30 Predictions
+        try:
+            fr30_data = df[df.get('es_fr30', False) == True] if 'es_fr30' in df.columns else df.head(10)
+            if not fr30_data.empty:
+                fr30_pred = ml_engine.predict_fr30_risk(fr30_data)
+                resultados_ml['fr30_predictions'] = fr30_pred
+        except Exception as e:
+            resultados_ml['fr30_predictions'] = {'error': str(e)}
+        
+        # RUL Analysis
+        try:
+            rul_results = ml_engine.calculate_rul(df.head(20))
+            resultados_ml['rul_analysis'] = rul_results
+        except Exception as e:
+            resultados_ml['rul_analysis'] = {'error': str(e)}
+        
+        # Anomaly Detection
+        try:
+            anomalies = ml_engine.detect_anomalies(df.head(50))
+            resultados_ml['anomaly_detection'] = anomalies
+        except Exception as e:
+            resultados_ml['anomaly_detection'] = {'error': str(e)}
+        
+        # Performance metrics
+        resultados_ml['model_performance'] = {
+            'models_available': list(ml_engine.models.keys()) if hasattr(ml_engine, 'models') else [],
+            'training_completed': global_data.get('ml_models_trained', False),
+            'data_size': len(df),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Almacenar resultados
+        global_data['ml_analysis'] = resultados_ml
+        
+        logging.info("✅ Análisis ML completo completado")
+        
+        return jsonify({
+            'success': True,
+            'data': resultados_ml,
+            'message': 'Análisis ML completo ejecutado exitosamente'
+        })
+        
+    except Exception as e:
+        logging.error(f"❌ Error en análisis ML: {e}")
+        return jsonify({'error': f'Error en análisis ML: {str(e)}'}), 500
+
+@app.route('/ml_specific/<analysis_type>', methods=['POST'])
+def ml_specific(analysis_type):
+    """Ejecuta análisis ML específico (fr30, rul, anomaly)"""
+    try:
+        if not global_data.get('df') is not None or global_data['df'].empty:
+            return jsonify({'error': 'No hay datos cargados para análisis ML'}), 400
+        
+        if not ML_AVAILABLE:
+            return jsonify({'error': 'Motor ML no disponible en este servidor'}), 500
+        
+        df = global_data['df']
+        
+        # Entrenar modelos si es necesario
+        if not global_data.get('ml_models_trained', False):
+            success = ml_engine.train_models(df)
+            if success:
+                global_data['ml_models_trained'] = True
+            else:
+                return jsonify({'error': 'Error entrenando modelos ML'}), 500
+        
+        logging.info(f"🎯 Ejecutando análisis ML específico: {analysis_type}")
+        
+        resultado = {}
+        
+        if analysis_type == 'fr30':
+            # Análisis especializado FR-30
+            fr30_data = df[df.get('es_fr30', False) == True] if 'es_fr30' in df.columns else df.head(10)
+            if not fr30_data.empty:
+                resultado = ml_engine.predict_fr30_risk(fr30_data)
+                resultado['analysis_type'] = 'FR-30 Risk Prediction'
+                resultado['equipos_analizados'] = len(fr30_data)
+            else:
+                return jsonify({'error': 'No se encontraron equipos FR-30 en los datos'}), 400
+                
+        elif analysis_type == 'rul':
+            # Análisis RUL (Remaining Useful Life)
+            resultado = ml_engine.calculate_rul(df.head(50))
+            resultado['analysis_type'] = 'Remaining Useful Life'
+            resultado['equipos_analizados'] = min(50, len(df))
+            
+        elif analysis_type == 'anomaly':
+            # Detección de anomalías
+            resultado = ml_engine.detect_anomalies(df.head(100))
+            resultado['analysis_type'] = 'Anomaly Detection'
+            resultado['registros_analizados'] = min(100, len(df))
+            
+        else:
+            return jsonify({'error': f'Tipo de análisis no válido: {analysis_type}'}), 400
+        
+        resultado['timestamp'] = datetime.now().isoformat()
+        resultado['data_source'] = global_data.get('file_name', 'dataset')
+        
+        # Almacenar resultado específico
+        if 'ml_specific_results' not in global_data:
+            global_data['ml_specific_results'] = {}
+        global_data['ml_specific_results'][analysis_type] = resultado
+        
+        logging.info(f"✅ Análisis {analysis_type} completado")
+        
+        return jsonify({
+            'success': True,
+            'data': resultado,
+            'message': f'Análisis {analysis_type.upper()} ejecutado exitosamente'
+        })
+        
+    except Exception as e:
+        logging.error(f"❌ Error en análisis {analysis_type}: {e}")
+        return jsonify({'error': f'Error en análisis {analysis_type}: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # Entrenar modelos al iniciar si ML está disponible
