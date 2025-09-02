@@ -168,24 +168,7 @@ def get_progress():
     """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
     return jsonify(progress_state)
 
-# Almacenamiento en memoria para datos y estado de la aplicación
-global_data = {
-    'df': None,
-    'file_path': None,
-    'file_name': None,
-    'processed_date': None,
-    'ml_models_trained': False
-}
 
-progress_state = {
-    'current_task': '',
-    'progress': 0,
-    'is_processing': False,
-    'message': '',
-    'error': None,
-    'total_steps': 0,
-    'current_step': 0
-}
 
 def update_progress(task, step, total_steps, message=""):
     """Actualiza el estado de progreso global"""
