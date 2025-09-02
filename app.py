@@ -1404,11 +1404,19 @@ def process_uploaded_file(filepath, filename):
         processing_time = round(time.time() - start_time, 2)
         
         # Estadísticas mejoradas
+        # Calcular errores de forma segura (solo sumar valores numéricos)
+        errores_detectados = 0
+        for valor in quality_report['errores'].values():
+            if isinstance(valor, (int, float)):
+                errores_detectados += valor
+            elif isinstance(valor, dict):
+                errores_detectados += len(valor)  # Contar elementos del diccionario
+        
         enhanced_stats = {
             'total_registros': quality_report['total_registros'],
             'registros_abiertos': quality_report['registros_abiertos'],
             'registros_cerrados': quality_report['registros_cerrados'],
-            'errores_detectados': sum(quality_report['errores'].values()),
+            'errores_detectados': errores_detectados,
             'catalogos_generados': len(catalogos),
             'sheet_used': target_sheet,
             'available_sheets': available_sheets,

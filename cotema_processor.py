@@ -106,8 +106,9 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     }
     
     # Normalizar nombres de columnas
-    df.columns = df.columns.astype(str).str.lower().str.strip()
-    df.columns = df.columns.str.replace(r'[^a-zA-Z0-9_]', '_', regex=True)
+    df.columns = df.columns.astype(str)
+    df.columns = [col.lower().strip() for col in df.columns]
+    df.columns = [re.sub(r'[^a-zA-Z0-9_]', '_', col) for col in df.columns]
     
     # Aplicar mapeo si encontramos coincidencias
     new_columns = {}
@@ -136,9 +137,15 @@ def _basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
     # Limpiar espacios en strings
     string_columns = df.select_dtypes(include=['object']).columns
     for col in string_columns:
-        df[col] = df[col].astype(str).str.strip()
-        df[col] = df[col].replace('nan', np.nan)
-        df[col] = df[col].replace('', np.nan)
+        try:
+            # Convertir a string y limpiar espacios de forma segura
+            df[col] = df[col].astype(str)
+            df[col] = [str(val).strip() if pd.notna(val) and str(val) != 'nan' else np.nan for val in df[col]]
+            df[col] = df[col].replace('nan', np.nan)
+            df[col] = df[col].replace('', np.nan)
+        except Exception as e:
+            logging.warning(f"⚠️ No se pudo limpiar la columna {col}: {e}")
+            continue
     
     logging.info(f"🧹 Limpieza básica completada. Shape final: {df.shape}")
     return df
@@ -182,7 +189,7 @@ def _generate_quality_report(df: pd.DataFrame) -> Dict:
     missing_values = df.isnull().sum()
     critical_missing = missing_values[missing_values > total_registros * 0.5]
     if not critical_missing.empty:
-        errores['columnas_criticas_faltantes'] = critical_missing.to_dict()
+        errores['columnas_criticas_faltantes'] = len(critical_missing)  # Solo el número, no el diccionario
     
     quality_report = {
         'total_registros': total_registros,
@@ -214,27 +221,41 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
     
     # Normalizar códigos de equipo
     if 'equipo' in df_norm.columns:
-        df_norm['equipo'] = df_norm['equipo'].astype(str).str.upper().str.strip()
-        # Generar FR-30 KPI básico
-        df_norm['es_fr30'] = df_norm['equipo'].str.contains('FR.*30|30.*FR', na=False, regex=True)
-        logging.info("🏷️ Códigos de equipo normalizados y FR-30 identificados")
+        try:
+            # Normalización segura de equipos
+            df_norm['equipo'] = [str(val).upper().strip() if pd.notna(val) else 'UNKNOWN' for val in df_norm['equipo']]
+            # Generar FR-30 KPI básico
+            df_norm['es_fr30'] = [bool(re.search(r'FR.*30|30.*FR', str(val), re.IGNORECASE)) for val in df_norm['equipo']]
+            logging.info("🏷️ Códigos de equipo normalizados y FR-30 identificados")
+        except Exception as e:
+            logging.warning(f"⚠️ Error normalizando equipos: {e}")
     
     # Normalizar estados
     if 'estado' in df_norm.columns:
-        estado_mapping = {
-            'abierto': 'ABIERTO',
-            'cerrado': 'CERRADO', 
-            'pendiente': 'PENDIENTE',
-            'en proceso': 'EN_PROCESO',
-            'completado': 'CERRADO',
-            'finalizado': 'CERRADO'
-        }
-        
-        df_norm['estado_normalizado'] = df_norm['estado'].astype(str).str.lower()
-        for old_val, new_val in estado_mapping.items():
-            df_norm.loc[df_norm['estado_normalizado'].str.contains(old_val, na=False), 'estado_normalizado'] = new_val
+        try:
+            estado_mapping = {
+                'abierto': 'ABIERTO',
+                'cerrado': 'CERRADO', 
+                'pendiente': 'PENDIENTE',
+                'en proceso': 'EN_PROCESO',
+                'completado': 'CERRADO',
+                'finalizado': 'CERRADO'
+            }
             
-        logging.info("🔄 Estados normalizados")
+            # Normalización segura de estados
+            estados_normalizados = []
+            for val in df_norm['estado']:
+                if pd.isna(val):
+                    estados_normalizados.append('DESCONOCIDO')
+                else:
+                    val_lower = str(val).lower().strip()
+                    mapped_state = estado_mapping.get(val_lower, val_lower.upper())
+                    estados_normalizados.append(mapped_state)
+            
+            df_norm['estado_normalizado'] = estados_normalizados
+            logging.info("🔄 Estados normalizados")
+        except Exception as e:
+            logging.warning(f"⚠️ Error normalizando estados: {e}")
     
     return df_norm
 
