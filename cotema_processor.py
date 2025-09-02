@@ -214,10 +214,23 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
     for col in date_columns:
         if col in df_norm.columns:
             try:
+                # Convertir a datetime de forma más robusta
+                original_values = df_norm[col].copy()
                 df_norm[col] = pd.to_datetime(df_norm[col], errors='coerce')
-                logging.info(f"📅 Columna {col} normalizada como fecha")
-            except:
-                logging.warning(f"⚠️ No se pudo normalizar {col} como fecha")
+                
+                # Verificar que la conversión fue exitosa
+                converted_count = df_norm[col].notna().sum()
+                total_count = original_values.notna().sum()
+                
+                if converted_count > 0:
+                    logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos)")
+                else:
+                    logging.warning(f"⚠️ No se pudieron convertir fechas en {col}, manteniendo como texto")
+                    df_norm[col] = original_values  # Restaurar valores originales
+                    
+            except Exception as e:
+                logging.warning(f"⚠️ Error normalizando fechas en {col}: {e}")
+                # Mantener valores originales en caso de error
     
     # Normalizar códigos de equipo
     if 'equipo' in df_norm.columns:
@@ -287,12 +300,35 @@ def _create_catalogs(df: pd.DataFrame) -> Dict:
     if 'fecha' in df.columns:
         fechas_validas = df['fecha'].dropna()
         if not fechas_validas.empty:
-            catalogos['temporal'] = {
-                'fecha_minima': fechas_validas.min(),
-                'fecha_maxima': fechas_validas.max(),
-                'rango_dias': (fechas_validas.max() - fechas_validas.min()).days,
-                'registros_con_fecha': len(fechas_validas)
-            }
+            try:
+                # Verificar si las fechas son datetime o strings
+                if pd.api.types.is_datetime64_any_dtype(fechas_validas):
+                    # Las fechas son datetime, podemos hacer operaciones temporales
+                    catalogos['temporal'] = {
+                        'fecha_minima': fechas_validas.min(),
+                        'fecha_maxima': fechas_validas.max(),
+                        'rango_dias': (fechas_validas.max() - fechas_validas.min()).days,
+                        'registros_con_fecha': len(fechas_validas),
+                        'tipo_fecha': 'datetime'
+                    }
+                else:
+                    # Las fechas son strings, solo estadísticas básicas
+                    catalogos['temporal'] = {
+                        'fecha_minima': str(fechas_validas.iloc[0]),
+                        'fecha_maxima': str(fechas_validas.iloc[-1]),
+                        'rango_dias': 'No calculable (formato texto)',
+                        'registros_con_fecha': len(fechas_validas),
+                        'tipo_fecha': 'string',
+                        'muestra_valores': fechas_validas.head(3).tolist()
+                    }
+                logging.info("📅 Estadísticas temporales creadas")
+            except Exception as e:
+                logging.warning(f"⚠️ Error creando estadísticas temporales: {e}")
+                # Catálogo temporal básico como fallback
+                catalogos['temporal'] = {
+                    'registros_con_fecha': len(fechas_validas),
+                    'error': str(e)
+                }
     
     logging.info(f"📚 Catálogos creados: {list(catalogos.keys())}")
     return catalogos
@@ -320,10 +356,27 @@ def get_fr30_analysis(df: pd.DataFrame) -> Dict:
     if 'fecha' in fr30_data.columns:
         fechas_fr30 = fr30_data['fecha'].dropna()
         if not fechas_fr30.empty:
-            analysis['periodo_fr30'] = {
-                'inicio': fechas_fr30.min(),
-                'fin': fechas_fr30.max(),
-                'registros_con_fecha': len(fechas_fr30)
-            }
+            try:
+                # Verificar si las fechas son datetime
+                if pd.api.types.is_datetime64_any_dtype(fechas_fr30):
+                    analysis['periodo_fr30'] = {
+                        'inicio': fechas_fr30.min(),
+                        'fin': fechas_fr30.max(),
+                        'registros_con_fecha': len(fechas_fr30),
+                        'tipo_fecha': 'datetime'
+                    }
+                else:
+                    # Fechas como string
+                    analysis['periodo_fr30'] = {
+                        'inicio': str(fechas_fr30.iloc[0]),
+                        'fin': str(fechas_fr30.iloc[-1]),
+                        'registros_con_fecha': len(fechas_fr30),
+                        'tipo_fecha': 'string'
+                    }
+            except Exception as e:
+                analysis['periodo_fr30'] = {
+                    'registros_con_fecha': len(fechas_fr30),
+                    'error': f'Error procesando fechas: {str(e)}'
+                }
     
     return analysis
