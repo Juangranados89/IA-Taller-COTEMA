@@ -712,7 +712,7 @@ def predictions_dashboard():
     """Ruta de predicciones - redirige al dashboard principal por ahora"""
     return redirect('/dashboard')
 
-@app.route('/ia-documentation')
+@app.route('/ia_documentation')
 def ia_documentation():
     """Documentación de IA"""
     try:
