@@ -1,158 +1,178 @@
 """
-COTEMA Processor - Motor de Procesamiento Especializado para Datos de Mantenimiento
-===================================================================================
+COTEMA Processor - Motor de Procesamiento para Datos de Mantenimiento (enfocado en COTEMA)
+==========================================================================================
 
-Este módulo contiene la lógica especializada para procesar y normalizar
-datos de mantenimiento del taller COTEMA.
+Este módulo procesa y normaliza datos reales del taller COTEMA sin simulaciones.
+Está diseñado para evitar colisiones de columnas (p. ej., fecha_in / fecha_out),
+entregar un reporte de calidad robusto y generar catálogos puramente desde el
+archivo cargado.
 
 Funciones principales:
-- process_cotema_data: Procesamiento principal con normalización inteligente
-- _generate_quality_report: Reporte de calidad e integridad de datos
-- _create_catalogs: Generación de catálogos para análisis ML
-- get_fr30_analysis: Extracto analítico específico FR-30
+- process_cotema_data(df_raw): orquesta todo el flujo y devuelve (dataset, quality_report, catalogos)
+- get_fr30_analysis(df, days=30): resumen real de correctivas en la ventana indicada (por defecto 30 días)
+
+Notas de diseño:
+- Mapeos por IGUALDAD EXACTA (no por substring) para evitar nombres duplicados.
+- Se respeta 'codigo' como identificador principal; se expone alias 'equipo' para compatibilidad.
+- No se generan códigos ni métricas simuladas. Si faltan datos, se reporta y/o se devuelve vacío/0.
 """
 
 from __future__ import annotations
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import logging
 import re
-from typing import Dict, List, Tuple, Any
+import unicodedata
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
 
 
 # --------------------------------------------------------------------------------------
 # API PRINCIPAL
 # --------------------------------------------------------------------------------------
 
-def process_cotema_data(df_raw: pd.DataFrame) -> Tuple[List[Dict], Dict, Dict]:
+def process_cotema_data(df_raw: pd.DataFrame) -> Tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
     """
-    Procesa y normaliza datos COTEMA con análisis de calidad integrado.
-    
+    Procesa y normaliza datos COTEMA con análisis de calidad integrado (sin simulaciones).
+
     Args:
-        df_raw: DataFrame crudo desde Excel
-        
+        df_raw: DataFrame crudo leído del Excel.
+
     Returns:
-        Tuple con:
-        - dataset: Lista de registros normalizados
-        - quality_report: Reporte de calidad y estadísticas
-        - catalogos: Catálogos para análisis ML
+        dataset: lista de registros normalizados (dicts)
+        quality_report: reporte de calidad (conteos, errores, completitud)
+        catalogos: catálogos derivados 100% de los datos reales
     """
-    logging.info("🔄 Iniciando procesamiento especializado COTEMA...")
-    
+    logging.info("🔄 Iniciando procesamiento COTEMA (enfocado en datos reales)...")
+
     try:
         # Paso 1: Normalización de columnas
         df = _normalize_columns(df_raw.copy())
-        
+
         # Paso 2: Limpieza básica
         df = _basic_cleaning(df)
-        
-        # Paso 3: Análisis de calidad
+
+        # Paso 3: Análisis de calidad (sobre df "crudo limpio" para ver problemas tempranos)
         quality_report = _generate_quality_report(df)
-        
-        # Paso 4: Normalización de datos
-        df_normalized = _normalize_data_values(df)
-        
-        # Paso 5: Creación de catálogos
-        catalogos = _create_catalogs(df_normalized)
-        
-        # Paso 6: Conversión a dataset final
-        dataset = df_normalized.to_dict('records')
-        
-        logging.info(f"✅ COTEMA processing completado. {len(dataset)} registros procesados.")
-        
+
+        # Paso 4: Normalización de valores (fechas, categóricos, métricas reales)
+        df_norm = _normalize_data_values(df)
+
+        # Paso 5: Catálogos (desde df normalizado)
+        catalogos = _create_catalogs(df_norm)
+
+        # Paso 6: Dataset final
+        dataset = df_norm.to_dict("records")
+
+        logging.info(f"✅ COTEMA processing OK. Registros: {len(dataset)}")
         return dataset, quality_report, catalogos
-        
+
     except Exception as e:
-        logging.error(f"❌ Error en process_cotema_data: {e}")
-        # Retorno de emergencia con datos mínimos
-        emergency_dataset = df_raw.head(100).to_dict('records') if df_raw is not None and not df_raw.empty else []
+        logging.exception(f"❌ Error en process_cotema_data: {e}")
+        emergency_dataset = df_raw.head(100).to_dict("records") if isinstance(df_raw, pd.DataFrame) and not df_raw.empty else []
         emergency_report = {
-            'total_registros': int(len(df_raw)) if df_raw is not None else 0,
-            'registros_abiertos': 0,
-            'registros_cerrados': 0,
-            'errores': {'processing_error': str(e)}
+            "total_registros": int(len(df_raw)) if isinstance(df_raw, pd.DataFrame) else 0,
+            "registros_abiertos": 0,
+            "registros_cerrados": 0,
+            "errores": {"processing_error": str(e)},
+            "columnas_disponibles": list(df_raw.columns) if isinstance(df_raw, pd.DataFrame) else [],
+            "completitud_general": 0.0,
         }
-        emergency_catalogs = {}
-        
-        return emergency_dataset, emergency_report, emergency_catalogs
+        return emergency_dataset, emergency_report, {}
 
 
 # --------------------------------------------------------------------------------------
-# NORMALIZACIÓN DE COLUMNAS (ROBUSTA Y SIN COLISIONES)
+# UTILIDADES
+# --------------------------------------------------------------------------------------
+
+def _strip_accents(s: str) -> str:
+    """Elimina acentos/diacríticos de una cadena (NFD)."""
+    if not isinstance(s, str):
+        s = str(s)
+    nf = unicodedata.normalize("NFD", s)
+    return "".join(ch for ch in nf if unicodedata.category(ch) != "Mn")
+
+
+def _sanitize_columns(cols: List[str]) -> List[str]:
+    """Normaliza nombres: lower, sin acentos, separadores a _, solo [a-z0-9_]."""
+    out = []
+    for c in cols:
+        c = str(c).strip()
+        c = _strip_accents(c).lower()
+        c = re.sub(r"[^a-z0-9]+", "_", c)  # no letras/numeros -> _
+        c = c.strip("_")
+        out.append(c or "col")
+    return out
+
+
+# --------------------------------------------------------------------------------------
+# NORMALIZACIÓN DE COLUMNAS (SIN COLISIONES)
 # --------------------------------------------------------------------------------------
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza nombres de columnas (robusto, sin colisiones peligrosas)."""
+    """Normaliza nombres de columnas con mapeos EXACTOS y resuelve duplicados."""
     df = df.copy()
-    df.columns = df.columns.astype(str)
-    # Normaliza: minúsculas, subrayado, sin caracteres especiales
-    df.columns = [re.sub(r'[^a-zA-Z0-9_]+', '_', c.lower().strip()) for c in df.columns]
+    df.columns = _sanitize_columns(df.columns.tolist())
 
-    # Mapeo EXÁCTO (no substring). Mantener campos de fecha distintos.
-    exact_map = {
-        # Equipo
-        'equipo': 'equipo',
-        'codigo_equipo': 'equipo',
-        'cod_equipo': 'equipo',
-        'equipment': 'equipo',
-        'codigo': 'equipo',  # opcional si a veces viene como "codigo"
+    # Mapeo EXACTO específico para el layout de COTEMA (ajustado para tu archivo)
+    mapping_exact = {
+        # Identidad / descripción
+        "codigo": "codigo",
+        "placa": "placa",
+        "descripcion": "descripcion",
+        "flota": "flota",
 
-        # Fechas (mantener campos separados)
-        'fecha': 'fecha',
-        'fecha_evento': 'fecha',
-        'date': 'fecha',
-        'fecha_inicio': 'fecha_inicio',
-        'start_date': 'fecha_inicio',
-        'inicio': 'fecha_inicio',
-        'fecha_fin': 'fecha_fin',
-        'end_date': 'fecha_fin',
-        'fin': 'fecha_fin',
-        'fecha_in': 'fecha_in',
-        'fecha_ingreso': 'fecha_in',
-        'fecha_entrada': 'fecha_in',
-        'in': 'fecha_in',
-        'fecha_out': 'fecha_out',
-        'fecha_salida': 'fecha_out',
-        'out': 'fecha_out',
+        # Medidas/lecturas
+        "horas_in": "horas_in",
+        "horometro_in": "horometro_in",
+        "km_in": "km_in",
+        "horas_out": "horas_out",
 
-        # Estado
-        'estado': 'estado',
-        'status': 'estado',
-        'estado_actual': 'estado',
+        # Fechas (NO colisionar)
+        "fecha_in": "fecha_in",
+        "fecha_out": "fecha_out",
 
-        # Otros
-        'descripcion': 'descripcion',
-        'description': 'descripcion',
-        'detalle': 'descripcion',
-        'observaciones': 'observaciones',
-        'comments': 'observaciones',
-        'tipo': 'tipo',
-        'type': 'tipo',
-        'prioridad': 'prioridad',
-        'priority': 'prioridad',
+        # Atributos de proceso
+        "operador": "operador",
+        "ejecutor": "ejecutor",
+        "tipo_atencion": "tipo_atencion",
+        "sistema_afectado": "sistema_afectado",
+        "origen_averia": "origen_averia",
+        "descripcion_intervencion": "descripcion_intervencion",
+        "atencion_local": "atencion_local",
+        "atencion_externa": "atencion_externa",
+        "sco_sse": "sco_sse",
+        "odc_ors": "odc_ors",
+
+        # Métricas ya calculadas en la fuente
+        "cont_dias_ave": "cont_dias_ave",
+        "con_hrs_ave": "con_hrs_ave",
+        "con_in_taller": "con_in_taller",
+        "mttr": "mttr",
     }
 
-    # Renombrar solo por coincidencia EXACTA (sin contains)
-    df.rename(columns=lambda c: exact_map.get(c, c), inplace=True)
+    # Aplicar mapeo exacto si la columna existe
+    rename_map = {c: mapping_exact[c] for c in df.columns if c in mapping_exact}
+    df.rename(columns=rename_map, inplace=True)
 
-    # Resolver columnas duplicadas combinando por primera no nula por fila
+    # Resolver duplicados de nombre si los hubiera (bfill por fila)
     if df.columns.duplicated().any():
-        dups = df.columns[df.columns.duplicated()].unique()
-        resolved = {}
-        for name in dups:
+        dup_names = df.columns[df.columns.duplicated()].unique().tolist()
+        for name in dup_names:
             block = df.loc[:, df.columns == name]
             combined = block.bfill(axis=1).iloc[:, 0]
-            resolved[name] = combined
-            # Eliminar todas las columnas duplicadas de ese nombre
+            # Elimina todas las columnas con ese nombre y deja una
             df = df.loc[:, df.columns != name]
-        # Reinsertar columna única combinada
-        for name, series in resolved.items():
-            df[name] = series.values
-        logging.warning(f"🔧 Resueltas colisiones de nombres: {list(resolved.keys())}")
+            df[name] = combined
+        logging.warning(f"🔧 Colisiones resueltas para: {dup_names}")
 
-    logging.info(f"🔄 Columnas normalizadas. Final: {list(df.columns)}")
+    # Alias de compatibilidad: expone 'equipo' además de 'codigo' (sin perder 'codigo')
+    if "codigo" in df.columns and "equipo" not in df.columns:
+        df["equipo"] = df["codigo"]
+
+    logging.info(f"🔄 Columnas normalizadas: {list(df.columns)}")
     return df
 
 
@@ -161,289 +181,244 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 # --------------------------------------------------------------------------------------
 
 def _basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
-    """Limpieza básica de datos."""
-    df = df.copy()
+    """Limpieza básica: elimina filas/columnas vacías y trim de strings."""
+    df = df.dropna(how="all")
+    df = df.dropna(axis=1, how="all")
 
-    # Eliminar filas completamente vacías
-    df = df.dropna(how='all')
-    # Eliminar columnas completamente vacías
-    df = df.dropna(axis=1, how='all')
-
-    # Limpiar espacios en strings
-    string_columns = df.select_dtypes(include=['object']).columns
-    for col in string_columns:
+    obj_cols = df.select_dtypes(include=["object"]).columns
+    for col in obj_cols:
         try:
-            df[col] = df[col].astype(str)
-            df[col] = [s.strip() if (pd.notna(s) and s != 'nan') else np.nan for s in df[col]]
-            df[col] = df[col].replace({'nan': np.nan, '': np.nan})
+            s = df[col].astype(str).str.strip()
+            s = s.replace({"": np.nan, "nan": np.nan, "None": np.nan})
+            df[col] = s
         except Exception as e:
-            logging.warning(f"⚠️ No se pudo limpiar la columna {col}: {e}")
-            continue
-
-    logging.info(f"🧹 Limpieza básica completada. Shape final: {df.shape}")
+            logging.warning(f"⚠️ No se pudo limpiar columna {col}: {e}")
+    logging.info(f"🧹 Limpieza básica OK. Shape: {df.shape}")
     return df
 
 
 # --------------------------------------------------------------------------------------
-# QUALITY REPORT (BLINDADO SI 'fecha' ESTÁ DUPLICADA)
+# QUALITY REPORT (REAL, SIN SUPOSICIONES)
 # --------------------------------------------------------------------------------------
 
 def _generate_quality_report(df: pd.DataFrame) -> Dict[str, Any]:
-    """Genera reporte de calidad de datos."""
-    total_registros = int(len(df))
-
-    # Análisis de estados si existe la columna
-    registros_abiertos = 0
-    registros_cerrados = 0
-    if 'estado' in df.columns:
-        estados_abiertos = ['abierto', 'pendiente', 'en proceso', 'activo', 'open', 'pending']
-        estados_cerrados = ['cerrado', 'completado', 'finalizado', 'closed', 'completed']
-        estado_values = df['estado'].fillna('').astype(str).str.lower()
-        for estado in estados_abiertos:
-            registros_abiertos += int(estado_values.str.contains(estado, na=False).sum())
-        for estado in estados_cerrados:
-            registros_cerrados += int(estado_values.str.contains(estado, na=False).sum())
-
+    """Genera un reporte de calidad centrado en columnas reales del archivo."""
+    total = int(len(df))
     errores: Dict[str, Any] = {}
 
-    # Fechas inválidas en 'fecha' si existe
-    if 'fecha' in df.columns:
-        try:
-            fecha_col = df['fecha']
-            if isinstance(fecha_col, pd.DataFrame):  # columnas duplicadas con el mismo nombre
-                fecha_col = fecha_col.bfill(axis=1).iloc[:, 0]
-            converted_dates = pd.to_datetime(fecha_col, errors='coerce', dayfirst=True)
-            fechas_nulas = int(converted_dates.isna().sum())
-            if fechas_nulas > 0:
-                errores['fechas_invalidas'] = fechas_nulas
-        except Exception as e:
-            logging.warning(f"⚠️ Error analizando fechas en quality report: {e}")
-            errores['fechas_no_procesables'] = total_registros
+    # Abiertos/Cerrados a partir de fecha_out
+    abiertos = cerrados = 0
+    if "fecha_out" in df.columns:
+        fecha_out = pd.to_datetime(df["fecha_out"], errors="coerce")
+        abiertos = int(fecha_out.isna().sum())
+        cerrados = int(total - abiertos)
 
-    # Valores faltantes por columna
-    missing_values = df.isnull().sum()
-    critical_missing = missing_values[missing_values > total_registros * 0.5]
-    if not critical_missing.empty:
-        errores['columnas_criticas_faltantes'] = int(len(critical_missing))
+    # Fechas nulas e invertidas
+    na_in = na_out = invertidas = 0
+    if "fecha_in" in df.columns:
+        fecha_in = pd.to_datetime(df["fecha_in"], errors="coerce")
+        na_in = int(fecha_in.isna().sum())
+    if "fecha_out" in df.columns:
+        fecha_out = pd.to_datetime(df["fecha_out"], errors="coerce")
+        na_out = int(fecha_out.isna().sum())
+    if "fecha_in" in df.columns and "fecha_out" in df.columns:
+        dias = (pd.to_datetime(df["fecha_out"], errors="coerce") - pd.to_datetime(df["fecha_in"], errors="coerce")).dt.days
+        invertidas = int((dias < 0).sum())
 
-    completitud_general = 100.0
-    denom = float(df.shape[0] * max(df.shape[1], 1))
-    if denom > 0:
-        completitud_general = round((1 - df.isnull().sum().sum() / denom) * 100, 2)
+    if na_in:
+        errores["fecha_in_nulas"] = na_in
+    if na_out:
+        errores["fecha_out_nulas"] = na_out
+    if invertidas:
+        errores["fechas_invertidas"] = invertidas
 
-    quality_report: Dict[str, Any] = {
-        'total_registros': total_registros,
-        'registros_abiertos': registros_abiertos,
-        'registros_cerrados': registros_cerrados,
-        'errores': errores,
-        'columnas_disponibles': list(df.columns),
-        'completitud_general': completitud_general
+    # MTTR negativo/sospechoso
+    if "mttr" in df.columns:
+        mttr_num = pd.to_numeric(df["mttr"], errors="coerce")
+        mttr_neg = int((mttr_num < 0).sum())
+        if mttr_neg:
+            errores["mttr_negativo"] = mttr_neg
+
+    # Completitud general
+    total_cells = int(df.shape[0] * max(df.shape[1], 1))
+    nonnull = int(df.notna().sum().sum())
+    completitud = round((nonnull / total_cells) * 100, 2) if total_cells else 0.0
+
+    report = {
+        "total_registros": total,
+        "registros_abiertos": abiertos,
+        "registros_cerrados": cerrados,
+        "errores": errores,
+        "columnas_disponibles": list(df.columns),
+        "completitud_general": completitud,
     }
-
-    logging.info(f"📊 Reporte de calidad generado. Completitud: {quality_report['completitud_general']}%")
-    return quality_report
+    logging.info(f"📊 Quality report OK (completitud {completitud}%)")
+    return report
 
 
 # --------------------------------------------------------------------------------------
-# NORMALIZACIÓN DE VALORES (FECHAS, EQUIPO, ESTADO)
+# NORMALIZACIÓN DE VALORES (FECHAS/CATEGÓRICOS SIN INVENTAR)
 # --------------------------------------------------------------------------------------
 
 def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza valores de datos (fechas, equipos, estados)."""
+    """Convierte fechas a datetime, deriva estado real y calcula días en taller (>=0)."""
     df_norm = df.copy()
 
-    # Extra safety: resolver duplicados de nombres si los hay
-    if df_norm.columns.duplicated().any():
-        for name in df_norm.columns[df_norm.columns.duplicated()].unique():
-            block = df_norm.loc[:, df_norm.columns == name]
-            combined = block.bfill(axis=1).iloc[:, 0]
-            df_norm = df_norm.loc[:, df_norm.columns != name]
-            df_norm[name] = combined.values
-        logging.warning("🔧 Colisiones resueltas en _normalize_data_values")
-
-    # 1) Fechas
-    date_columns = ['fecha', 'fecha_inicio', 'fecha_fin', 'date', 'fecha_in', 'fecha_out']
-    for col in date_columns:
+    # Fechas
+    for col in ("fecha_in", "fecha_out"):
         if col in df_norm.columns:
             try:
-                col_data = df_norm[col]
-                # Si es DataFrame (duplicados), aplanar
-                if isinstance(col_data, pd.DataFrame):
-                    col_data = col_data.bfill(axis=1).iloc[:, 0]
-
-                if 'out' in col.lower():
-                    # Respetar registros abiertos: solo convertir no-vacíos
-                    mask = col_data.notna() & (col_data.astype(str).str.strip() != '')
-                    if mask.any():
-                        converted = pd.to_datetime(col_data[mask], errors='coerce', dayfirst=True)
-                        col_data.loc[mask] = converted
-                        df_norm[col] = col_data.values
-                        logging.info(f"📅 {col} normalizada ({int(converted.notna().sum())}/{int(mask.sum())})")
-                    else:
-                        logging.info(f"📅 {col} sin valores; registros abiertos")
-                else:
-                    converted = pd.to_datetime(col_data, errors='coerce', dayfirst=True)
-                    df_norm[col] = converted.values
-                    logging.info(f"📅 {col} normalizada ({int(converted.notna().sum())}/{int(col_data.notna().sum())})")
+                df_norm[col] = pd.to_datetime(df_norm[col], errors="coerce")
             except Exception as e:
-                logging.warning(f"⚠️ Error normalizando fechas en {col}: {e}")
-                # mantener original
+                logging.warning(f"⚠️ Error normalizando {col}: {e}")
 
-    # Si no existe 'fecha' pero hay 'fecha_out' o 'fecha_in', crearla (preferir OUT)
-    if 'fecha' not in df_norm.columns:
-        if 'fecha_out' in df_norm.columns or 'fecha_in' in df_norm.columns:
-            fecha_out = df_norm['fecha_out'] if 'fecha_out' in df_norm.columns else pd.Series([pd.NaT] * len(df_norm))
-            fecha_in = df_norm['fecha_in'] if 'fecha_in' in df_norm.columns else pd.Series([pd.NaT] * len(df_norm))
-            df_norm['fecha'] = fecha_out.fillna(fecha_in)
-            df_norm['fecha'] = pd.to_datetime(df_norm['fecha'], errors='coerce', dayfirst=True)
-            logging.info("📅 Columna 'fecha' creada como preferencia(fecha_out, fecha_in)")
+    # Estado real: ABIERTO si fecha_out NaT, CERRADO en caso contrario
+    if "fecha_out" in df_norm.columns and "estado" not in df_norm.columns:
+        df_norm["estado"] = np.where(df_norm["fecha_out"].isna(), "ABIERTO", "CERRADO")
 
-    # 2) Normalizar códigos de equipo
-    if 'equipo' in df_norm.columns:
-        try:
-            df_norm['equipo'] = [str(val).upper().strip() if pd.notna(val) else 'UNKNOWN' for val in df_norm['equipo']]
-            # Tag simple para FR-30 según el código del equipo (opcional)
-            df_norm['es_fr30'] = [bool(re.search(r'FR.*30|30.*FR', str(val), re.IGNORECASE)) for val in df_norm['equipo']]
-            logging.info("🏷️ Códigos de equipo normalizados y FR-30 identificados")
-        except Exception as e:
-            logging.warning(f"⚠️ Error normalizando equipos: {e}")
+    # Días en taller (sin negativos; negativos -> NaN)
+    if "fecha_in" in df_norm.columns and "fecha_out" in df_norm.columns:
+        dias = (df_norm["fecha_out"] - df_norm["fecha_in"]).dt.days
+        df_norm["dias_en_taller"] = np.where(dias >= 0, dias, np.nan)
 
-    # 3) Normalizar estados
-    if 'estado' in df_norm.columns:
-        try:
-            estado_mapping = {
-                'abierto': 'ABIERTO',
-                'cerrado': 'CERRADO',
-                'pendiente': 'PENDIENTE',
-                'en proceso': 'EN_PROCESO',
-                'completado': 'CERRADO',
-                'finalizado': 'CERRADO',
-                'open': 'ABIERTO',
-                'closed': 'CERRADO',
-                'completed': 'CERRADO',
-                'active': 'ABIERTO',
-                'pending': 'PENDIENTE',
-            }
-            estados_normalizados: List[str] = []
-            for val in df_norm['estado']:
-                if pd.isna(val):
-                    estados_normalizados.append('DESCONOCIDO')
-                else:
-                    raw = str(val).lower().strip()
-                    estados_normalizados.append(estado_mapping.get(raw, raw.upper()))
-            df_norm['estado_normalizado'] = estados_normalizados
-            logging.info("🔄 Estados normalizados")
-        except Exception as e:
-            logging.warning(f"⚠️ Error normalizando estados: {e}")
+    # Categóricos clave en mayúsculas limpias (sin inventar valores)
+    for cat in ("tipo_atencion", "sistema_afectado", "origen_averia", "atencion_local", "atencion_externa"):
+        if cat in df_norm.columns:
+            s = df_norm[cat].astype(str).str.strip().str.upper()
+            df_norm[cat] = s.replace({"NAN": np.nan, "NONE": np.nan, "": np.nan})
 
     return df_norm
 
 
 # --------------------------------------------------------------------------------------
-# CATÁLOGOS PARA ML
+# CATÁLOGOS (DESDE DATOS REALES)
 # --------------------------------------------------------------------------------------
 
 def _create_catalogs(df: pd.DataFrame) -> Dict[str, Any]:
-    """Crea catálogos para análisis ML."""
-    catalogos: Dict[str, Any] = {}
+    """Construye catálogos puros desde el df normalizado (sin defaults simulados)."""
+    cat: Dict[str, Any] = {}
 
     # Catálogo de equipos
-    if 'equipo' in df.columns:
-        equipos_unicos = df['equipo'].dropna().astype(str).unique()
-        catalogos['equipos'] = {
-            'total': int(len(equipos_unicos)),
-            'lista': sorted(map(str, equipos_unicos)),
-            'fr30_count': int(df['es_fr30'].sum()) if 'es_fr30' in df.columns else 0
+    if "codigo" in df.columns:
+        cods = df["codigo"].dropna().astype(str).unique()
+        cat["equipos"] = {
+            "total": int(len(cods)),
+            "lista": sorted(cods.tolist()),
         }
 
-    # Catálogo de estados
-    if 'estado_normalizado' in df.columns:
-        estados_unicos = df['estado_normalizado'].dropna().astype(str).unique()
-        catalogos['estados'] = {
-            'total': int(len(estados_unicos)),
-            'lista': sorted(map(str, estados_unicos)),
-            'distribucion': {str(k): int(v) for k, v in df['estado_normalizado'].value_counts(dropna=False).to_dict().items()}
+    # Tipos de atención
+    if "tipo_atencion" in df.columns:
+        vals = df["tipo_atencion"].dropna().astype(str)
+        cat["tipo_atencion"] = {
+            "total": int(vals.nunique()),
+            "distribucion": vals.value_counts().to_dict(),
         }
 
-    # Estadísticas temporales
-    if 'fecha' in df.columns:
-        fechas_validas = df['fecha'].dropna()
-        if not fechas_validas.empty:
-            try:
-                if pd.api.types.is_datetime64_any_dtype(fechas_validas):
-                    catalogos['temporal'] = {
-                        'fecha_minima': pd.to_datetime(fechas_validas.min()).isoformat(),
-                        'fecha_maxima': pd.to_datetime(fechas_validas.max()).isoformat(),
-                        'rango_dias': int((fechas_validas.max() - fechas_validas.min()).days),
-                        'registros_con_fecha': int(len(fechas_validas)),
-                        'tipo_fecha': 'datetime'
-                    }
-                else:
-                    muestra_valores = [str(val) for val in fechas_validas.head(3)]
-                    catalogos['temporal'] = {
-                        'fecha_minima': str(fechas_validas.iloc[0]),
-                        'fecha_maxima': str(fechas_validas.iloc[-1]),
-                        'rango_dias': 'No calculable (formato texto)',
-                        'registros_con_fecha': int(len(fechas_validas)),
-                        'tipo_fecha': 'string',
-                        'muestra_valores': muestra_valores
-                    }
-                logging.info("📅 Estadísticas temporales creadas")
-            except Exception as e:
-                logging.warning(f"⚠️ Error creando estadísticas temporales: {e}")
-                catalogos['temporal'] = {
-                    'registros_con_fecha': int(len(fechas_validas)),
-                    'error': str(e)
-                }
+    # Sistema afectado
+    if "sistema_afectado" in df.columns:
+        vals = df["sistema_afectado"].dropna().astype(str)
+        cat["sistema_afectado"] = {
+            "total": int(vals.nunique()),
+            "top10": vals.value_counts().head(10).to_dict(),
+        }
 
-    logging.info(f"📚 Catálogos creados: {list(catalogos.keys())}")
-    return catalogos
+    # Temporal (basado en fecha_in)
+    if "fecha_in" in df.columns:
+        fechas = pd.to_datetime(df["fecha_in"], errors="coerce").dropna()
+        if not fechas.empty:
+            cat["temporal"] = {
+                "fecha_minima": str(fechas.min().date()),
+                "fecha_maxima": str(fechas.max().date()),
+                "rango_dias": int((fechas.max() - fechas.min()).days),
+                "registros_con_fecha_in": int(len(fechas)),
+            }
+
+    return cat
 
 
 # --------------------------------------------------------------------------------------
-# ANÁLISIS ESPECÍFICO FR-30
+# ANÁLISIS ESPECÍFICO "FR-30" (REAL: CORRECTIVAS EN ÚLTIMOS N DÍAS)
 # --------------------------------------------------------------------------------------
 
-def get_fr30_analysis(df: pd.DataFrame) -> Dict[str, Any]:
-    """Análisis específico para equipos FR-30."""
-    if 'es_fr30' not in df.columns:
-        return {'error': 'Análisis FR-30 no disponible - datos no procesados'}
+def get_fr30_analysis(df: pd.DataFrame, days: int = 30, codigo_column: str = "codigo") -> Dict[str, Any]:
+    """
+    Análisis realista para el KPI “FR-30” interpretado como actividad correctiva reciente.
 
-    fr30_data = df[df['es_fr30'] == True]
+    Produce el top de equipos por conteo de mantenimientos CORRECTIVOS en la ventana
+    de 'days' días hacia atrás, usando 'fecha_in' como referencia.
 
-    analysis: Dict[str, Any] = {
-        'total_registros_fr30': int(len(fr30_data)),
-        'porcentaje_fr30': round((len(fr30_data) / len(df)) * 100, 2) if len(df) > 0 else 0.0,
-        'equipos_fr30_unicos': int(fr30_data['equipo'].nunique()) if 'equipo' in fr30_data.columns else 0
+    Args:
+        df: DataFrame normalizado o crudo (se normalizan fechas localmente si hace falta).
+        days: ventana hacia atrás en días (por defecto 30).
+        codigo_column: nombre de la columna de códigos (por defecto 'codigo').
+
+    Returns:
+        dict con:
+            - window_days: tamaño de la ventana en días
+            - since: fecha de corte ISO (hoy - days)
+            - total_correctivas_en_ventana: entero
+            - equipos_con_correctivas: entero (número de equipos con al menos 1 correctiva)
+            - top_equipos: lista [{codigo, correctivas_ventana}]
+    """
+    if df is None or df.empty:
+        return {
+            "window_days": int(days),
+            "since": datetime.now().date().isoformat(),
+            "total_correctivas_en_ventana": 0,
+            "equipos_con_correctivas": 0,
+            "top_equipos": [],
+        }
+
+    # Asegurar columnas necesarias
+    if "tipo_atencion" not in df.columns or codigo_column not in df.columns:
+        return {
+            "window_days": int(days),
+            "since": datetime.now().date().isoformat(),
+            "total_correctivas_en_ventana": 0,
+            "equipos_con_correctivas": 0,
+            "top_equipos": [],
+            "warning": "Faltan columnas requeridas (tipo_atencion / codigo)",
+        }
+
+    # Normaliza fecha_in localmente para este cálculo
+    if "fecha_in" in df.columns:
+        fecha_in = pd.to_datetime(df["fecha_in"], errors="coerce")
+    else:
+        # Si no existe, no podemos calcular ventana temporal real
+        return {
+            "window_days": int(days),
+            "since": datetime.now().date().isoformat(),
+            "total_correctivas_en_ventana": 0,
+            "equipos_con_correctivas": 0,
+            "top_equipos": [],
+            "warning": "No existe fecha_in para calcular la ventana temporal",
+        }
+
+    cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+    mask_recent = (fecha_in.notna()) & (fecha_in >= cutoff)
+
+    recent = df.loc[mask_recent]
+    # Filtra CORRECTIVA (en mayúsculas tras normalización)
+    tipos = recent["tipo_atencion"].astype(str).str.upper()
+    recent_corr = recent.loc[tipos == "CORRECTIVA"]
+
+    if recent_corr.empty:
+        return {
+            "window_days": int(days),
+            "since": cutoff.date().isoformat(),
+            "total_correctivas_en_ventana": 0,
+            "equipos_con_correctivas": 0,
+            "top_equipos": [],
+        }
+
+    top = (
+        recent_corr.groupby(codigo_column).size().sort_values(ascending=False).head(10).reset_index(name="correctivas_ventana")
+    )
+
+    return {
+        "window_days": int(days),
+        "since": cutoff.date().isoformat(),
+        "total_correctivas_en_ventana": int(len(recent_corr)),
+        "equipos_con_correctivas": int(top[codigo_column].nunique()),
+        "top_equipos": top.to_dict("records"),
     }
-
-    # Estados FR-30
-    if 'estado_normalizado' in fr30_data.columns:
-        analysis['estados_fr30'] = {str(k): int(v) for k, v in fr30_data['estado_normalizado'].value_counts().to_dict().items()}
-
-    # Periodo FR-30
-    if 'fecha' in fr30_data.columns:
-        fechas_fr30 = fr30_data['fecha'].dropna()
-        if not fechas_fr30.empty:
-            try:
-                if pd.api.types.is_datetime64_any_dtype(fechas_fr30):
-                    analysis['periodo_fr30'] = {
-                        'inicio': pd.to_datetime(fechas_fr30.min()).isoformat(),
-                        'fin': pd.to_datetime(fechas_fr30.max()).isoformat(),
-                        'registros_con_fecha': int(len(fechas_fr30)),
-                        'tipo_fecha': 'datetime'
-                    }
-                else:
-                    analysis['periodo_fr30'] = {
-                        'inicio': str(fechas_fr30.iloc[0]),
-                        'fin': str(fechas_fr30.iloc[-1]),
-                        'registros_con_fecha': int(len(fechas_fr30)),
-                        'tipo_fecha': 'string'
-                    }
-            except Exception as e:
-                analysis['periodo_fr30'] = {
-                    'registros_con_fecha': int(len(fechas_fr30)),
-                    'error': f'Error procesando fechas: {str(e)}'
-                }
-
-    return analysis
