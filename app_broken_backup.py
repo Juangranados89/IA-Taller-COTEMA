@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+# Write a cleaned, dependency-safe Flask app tailored to the real COTEMA file and the new processor.
+app_code = r'''from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from datetime import datetime, timedelta
 import os
 from werkzeug.utils import secure_filename
@@ -708,3 +709,8 @@ def api_status():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+'''
+with open('/mnt/data/app_cotema_clean.py', 'w', encoding='utf-8') as f:
+    f.write(app_code)
+
+'/mnt/data/app_cotema_clean.py'
