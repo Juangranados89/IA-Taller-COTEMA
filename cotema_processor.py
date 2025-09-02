@@ -209,24 +209,26 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
     
     df_norm = df.copy()
     
-    # Normalizar fechas si existen
+    # Normalizar fechas si existen - Versión robusta
     date_columns = ['fecha', 'fecha_inicio', 'fecha_fin', 'date']
     for col in date_columns:
         if col in df_norm.columns:
             try:
-                # Convertir a datetime de forma más robusta
-                original_values = df_norm[col].copy()
-                df_norm[col] = pd.to_datetime(df_norm[col], errors='coerce')
+                # Hacer una copia para evitar problemas de índice duplicado
+                original_values = df_norm[col].copy().reset_index(drop=True)
+                
+                # Intentar conversión a datetime
+                converted_dates = pd.to_datetime(original_values, errors='coerce')
                 
                 # Verificar que la conversión fue exitosa
-                converted_count = df_norm[col].notna().sum()
+                converted_count = converted_dates.notna().sum()
                 total_count = original_values.notna().sum()
                 
                 if converted_count > 0:
+                    df_norm[col] = converted_dates
                     logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos)")
                 else:
                     logging.warning(f"⚠️ No se pudieron convertir fechas en {col}, manteniendo como texto")
-                    df_norm[col] = original_values  # Restaurar valores originales
                     
             except Exception as e:
                 logging.warning(f"⚠️ Error normalizando fechas en {col}: {e}")
@@ -296,7 +298,7 @@ def _create_catalogs(df: pd.DataFrame) -> Dict:
             'distribucion': df['estado_normalizado'].value_counts().to_dict()
         }
     
-    # Estadísticas temporales
+    # Estadísticas temporales - Versión robusta
     if 'fecha' in df.columns:
         fechas_validas = df['fecha'].dropna()
         if not fechas_validas.empty:
@@ -313,13 +315,14 @@ def _create_catalogs(df: pd.DataFrame) -> Dict:
                     }
                 else:
                     # Las fechas son strings, solo estadísticas básicas
+                    muestra_valores = [str(val) for val in fechas_validas.head(3)]
                     catalogos['temporal'] = {
                         'fecha_minima': str(fechas_validas.iloc[0]),
                         'fecha_maxima': str(fechas_validas.iloc[-1]),
                         'rango_dias': 'No calculable (formato texto)',
                         'registros_con_fecha': len(fechas_validas),
                         'tipo_fecha': 'string',
-                        'muestra_valores': fechas_validas.head(3).tolist()
+                        'muestra_valores': muestra_valores
                     }
                 logging.info("📅 Estadísticas temporales creadas")
             except Exception as e:
