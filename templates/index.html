@@ -3,556 +3,368 @@
 {% block title %}COTEMA - Análisis Predictivo{% endblock %}
 
 {% block content %}
+<!-- Estilos mínimos para reemplazar los style dinámicos -->
+<style>
+  .grad-success { background: linear-gradient(135deg, #28a745, #20c997); color: #fff; }
+  .grad-danger  { background: linear-gradient(135deg, #dc3545, #fd7e14); color: #fff; }
+  .step-number  { width: 40px; height: 40px; }
+  .upload-zone  { border: 2px dashed #ced4da; border-radius: .5rem; padding: 1.5rem; }
+</style>
+
 <div class="container-fluid px-4 py-3">
-    <!-- 🎯 OPERACIÓN CLARIDAD - Header Minimalista -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="text-center bg-gradient-primary text-white p-4 rounded-3 shadow-sm">
-                <h1 class="h2 mb-2">
-                    <i class="fas fa-brain me-2"></i>
-                    COTEMA IA - Análisis Predictivo de Mantenimiento
-                </h1>
-                <p class="mb-0 opacity-75">
-                    Análisis especializado en KPI FR-30 con Machine Learning avanzado
-                </p>
-            </div>
-        </div>
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="text-center bg-gradient-primary text-white p-4 rounded-3 shadow-sm">
+        <h1 class="h2 mb-2">
+          <i class="fas fa-brain me-2"></i>
+          COTEMA IA - Análisis Predictivo de Mantenimiento
+        </h1>
+        <p class="mb-0 opacity-75">Análisis especializado en KPI FR-30 con Machine Learning avanzado</p>
+      </div>
     </div>
+  </div>
 
-    <!-- 🚀 WORKFLOW DE 3 PASOS - Diseño Moderno -->
-    <div class="row g-4">
-        <!-- PASO 1: CARGAR DATOS -->
-        <div class="col-lg-4">
-            <div class="card h-100 border-0 shadow-sm" id="step1-card">
-                <div class="card-header bg-primary text-white text-center py-3">
-                    <div class="step-number bg-white text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">
-                        <strong>1</strong>
-                    </div>
-                    <h5 class="mb-0">📊 Cargar Datos</h5>
-                </div>
-                <div class="card-body text-center">
-                    {% if not data_loaded %}
-                    <!-- Estado: Sin datos -->
-                    <div class="upload-zone" id="upload-zone">
-                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                        <h6 class="text-muted mb-3">Arrastra tu archivo Excel aquí</h6>
-                        
-                        <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="uploadForm">
-                            <div class="mb-3">
-                                <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required style="display: none;">
-                                <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file').click()">
-                                    <i class="fas fa-file-excel me-2"></i>
-                                    Seleccionar Archivo
-                                </button>
-                            </div>
-                        </form>
-                        
-                        <small class="text-muted">
-                            Busca automáticamente la hoja "Datos_Limpios"<br>
-                            Formatos: .xlsx, .xls (máx. 50MB)
-                        </small>
-                    </div>
-                    {% else %}
-                    <!-- Estado: Datos cargados -->
-                    <div class="upload-success">
-                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                        <h6 class="text-success mb-2">✅ Datos Cargados</h6>
-                        <div class="border rounded p-3 bg-light">
-                            <strong>{{ file_name }}</strong><br>
-                            <small class="text-muted">
-                                {{ stats.total_registros }} registros • 
-                                Procesado {{ stats.processing_time }}s
-                            </small>
-                            {% if stats.sheet_used %}
-                            <br><small class="badge bg-info">Hoja: {{ stats.sheet_used }}</small>
-                            {% endif %}
-                        </div>
-                        <button class="btn btn-outline-primary btn-sm mt-2" onclick="reloadPage()">
-                            <i class="fas fa-redo me-1"></i>
-                            Cargar Otro Archivo
-                        </button>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+  <div class="row g-4">
+    <!-- PASO 1 -->
+    <div class="col-lg-4">
+      <div class="card h-100 border-0 shadow-sm" id="step1-card">
+        <div class="card-header bg-primary text-white text-center py-3">
+          <div class="step-number bg-white text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-2">
+            <strong>1</strong>
+          </div>
+          <h5 class="mb-0">📊 Cargar Datos</h5>
         </div>
-
-        <!-- PASO 2: ANÁLISIS ESTADÍSTICO FR-30 -->
-        <div class="col-lg-4">
-            <div class="card h-100 border-0 shadow-sm" id="step2-card">
-                <div class="card-header text-center py-3" 
-                     style="background: {{ 'linear-gradient(135deg, #28a745, #20c997)' if data_loaded else '#6c757d' }}; color: white;">
-                    <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                         style="width: 40px; height: 40px; color: {{ '#28a745' if data_loaded else '#6c757d' }};">
-                        <strong>2</strong>
-                    </div>
-                    <h5 class="mb-0">📈 Análisis Estadístico FR-30</h5>
-                </div>
-                <div class="card-body text-center">
-                    {% if data_loaded %}
-                    <!-- Estado: Disponible para análisis -->
-                    <div class="analysis-ready">
-                        <i class="fas fa-chart-line fa-3x text-success mb-3"></i>
-                        <h6 class="text-success mb-3">Listo para Análisis</h6>
-                        
-                        {% if stats.get('fr30_count', 0) > 0 %}
-                        <div class="alert alert-info mb-3">
-                            <strong>{{ stats.fr30_count }} equipos FR-30</strong> detectados
-                        </div>
-                        {% endif %}
-                        
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-success btn-lg" onclick="runStatisticalAnalysis()">
-                                <i class="fas fa-calculator me-2"></i>
-                                Ejecutar Análisis
-                            </button>
-                            <small class="text-muted">
-                                KPIs • Tendencias • Patrones
-                            </small>
-                        </div>
-                    </div>
-                    {% else %}
-                    <!-- Estado: Esperando datos -->
-                    <div class="analysis-waiting">
-                        <i class="fas fa-hourglass-half fa-3x text-muted mb-3"></i>
-                        <h6 class="text-muted mb-3">Esperando Datos</h6>
-                        <p class="text-muted small">
-                            Primero carga un archivo Excel<br>
-                            para continuar con el análisis
-                        </p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- PASO 3: ANÁLISIS ML AVANZADO -->
-        <div class="col-lg-4">
-            <div class="card h-100 border-0 shadow-sm" id="step3-card">
-                <div class="card-header text-center py-3" 
-                     style="background: {{ 'linear-gradient(135deg, #dc3545, #fd7e14)' if data_loaded else '#6c757d' }}; color: white;">
-                    <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                         style="width: 40px; height: 40px; color: {{ '#dc3545' if data_loaded else '#6c757d' }};">
-                        <strong>3</strong>
-                    </div>
-                    <h5 class="mb-0">🤖 Análisis ML Avanzado</h5>
-                </div>
-                <div class="card-body text-center">
-                    {% if data_loaded %}
-                    <!-- Estado: ML disponible -->
-                    <div class="ml-ready">
-                        <i class="fas fa-robot fa-3x text-danger mb-3"></i>
-                        <h6 class="text-danger mb-3">IA Lista para Predicciones</h6>
-                        
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-danger btn-lg" onclick="runMLAnalysis()">
-                                <i class="fas fa-brain me-2"></i>
-                                Ejecutar ML
-                            </button>
-                            <div class="btn-group-vertical w-100" role="group">
-                                <button class="btn btn-outline-warning btn-sm" onclick="runSpecificML('fr30')">
-                                    FR-30 Predicción
-                                </button>
-                                <button class="btn btn-outline-info btn-sm" onclick="runSpecificML('rul')">
-                                    RUL Análisis
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" onclick="runSpecificML('anomaly')">
-                                    Detección Anomalías
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    {% else %}
-                    <!-- Estado: Esperando datos -->
-                    <div class="ml-waiting">
-                        <i class="fas fa-robot fa-3x text-muted mb-3"></i>
-                        <h6 class="text-muted mb-3">IA en Espera</h6>
-                        <p class="text-muted small">
-                            Los modelos de Machine Learning<br>
-                            están listos para analizar tus datos
-                        </p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 📊 PANEL DE RESULTADOS DINÁMICO -->
-    {% if data_loaded %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">
-                        <i class="fas fa-chart-bar me-2"></i>
-                        Panel de Resultados
-                    </h5>
-                </div>
-                <div class="card-body" id="results-panel">
-                    <!-- Resumen Inicial de Datos -->
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <div class="border rounded p-3">
-                                <h3 class="text-primary">{{ stats.total_registros }}</h3>
-                                <small class="text-muted">Total Registros</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="border rounded p-3">
-                                <h3 class="text-success">{{ stats.get('registros_cerrados', '---') }}</h3>
-                                <small class="text-muted">Cerrados</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="border rounded p-3">
-                                <h3 class="text-warning">{{ stats.get('registros_abiertos', '---') }}</h3>
-                                <small class="text-muted">Abiertos</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="border rounded p-3">
-                                <h3 class="text-info">{{ stats.get('fr30_count', '---') }}</h3>
-                                <small class="text-muted">Equipos FR-30</small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-3 text-center">
-                        <small class="text-muted">
-                            Los resultados de análisis aparecerán aquí conforme ejecutes los pasos 2 y 3
-                        </small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<!-- 🔄 MODAL DE PROGRESO MEJORADO -->
-<div class="modal fade" id="progressModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-body text-center p-4">
+        <div class="card-body text-center">
+          {% if not data_loaded %}
+            <div class="upload-zone" id="upload-zone">
+              <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+              <h6 class="text-muted mb-3">Arrastra tu archivo Excel aquí</h6>
+              <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="uploadForm">
                 <div class="mb-3">
-                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Procesando...</span>
-                    </div>
+                  <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required style="display:none;">
+                  <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file').click()">
+                    <i class="fas fa-file-excel me-2"></i>
+                    Seleccionar Archivo
+                  </button>
                 </div>
-                <h5 id="progress-title">Procesando archivo...</h5>
-                <div class="progress mb-3" style="height: 20px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         id="progress-bar" role="progressbar" style="width: 0%"></div>
-                </div>
-                <p class="text-muted mb-0" id="progress-details">Iniciando procesamiento...</p>
+              </form>
+              <small class="text-muted">
+                Busca automáticamente la hoja "Datos_Limpios"<br>
+                Formatos: .xlsx, .xls (máx. 50MB)
+              </small>
             </div>
+          {% else %}
+            <div class="upload-success">
+              <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+              <h6 class="text-success mb-2">✅ Datos Cargados</h6>
+              <div class="border rounded p-3 bg-light">
+                <strong>{{ file_name|default('archivo.xlsx') }}</strong><br>
+                <small class="text-muted">
+                  {{ stats.total_registros|default(0) }} registros • Procesado {{ stats.processing_time|default(0) }}s
+                </small>
+                {% if stats.sheet_used|default('') %}
+                  <br><small class="badge bg-info">Hoja: {{ stats.sheet_used }}</small>
+                {% endif %}
+              </div>
+              <button class="btn btn-outline-primary btn-sm mt-2" onclick="reloadPage()">
+                <i class="fas fa-redo me-1"></i>
+                Cargar Otro Archivo
+              </button>
+            </div>
+          {% endif %}
         </div>
+      </div>
     </div>
+
+    <!-- PASO 2 -->
+    <div class="col-lg-4">
+      <div class="card h-100 border-0 shadow-sm" id="step2-card">
+        <div class="card-header text-center py-3 {{ 'grad-success' if data_loaded else 'bg-secondary text-white' }}">
+          <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2 {{ 'text-success' if data_loaded else 'text-secondary' }}">
+            <strong>2</strong>
+          </div>
+          <h5 class="mb-0">📈 Análisis Estadístico FR-30</h5>
+        </div>
+        <div class="card-body text-center">
+          {% if data_loaded %}
+            <div class="analysis-ready">
+              <i class="fas fa-chart-line fa-3x text-success mb-3"></i>
+              <h6 class="text-success mb-3">Listo para Análisis</h6>
+              {% if stats.get('fr30_count', 0) > 0 %}
+                <div class="alert alert-info mb-3">
+                  <strong>{{ stats.get('fr30_count', 0) }} equipos FR-30</strong> detectados
+                </div>
+              {% endif %}
+              <div class="d-grid gap-2">
+                <button class="btn btn-success btn-lg" onclick="runStatisticalAnalysis()">
+                  <i class="fas fa-calculator me-2"></i>
+                  Ejecutar Análisis
+                </button>
+                <small class="text-muted">KPIs • Tendencias • Patrones</small>
+              </div>
+            </div>
+          {% else %}
+            <div class="analysis-waiting">
+              <i class="fas fa-hourglass-half fa-3x text-muted mb-3"></i>
+              <h6 class="text-muted mb-3">Esperando Datos</h6>
+              <p class="text-muted small">Primero carga un archivo Excel para continuar con el análisis</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 3 -->
+    <div class="col-lg-4">
+      <div class="card h-100 border-0 shadow-sm" id="step3-card">
+        <div class="card-header text-center py-3 {{ 'grad-danger' if data_loaded else 'bg-secondary text-white' }}">
+          <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2 {{ 'text-danger' if data_loaded else 'text-secondary' }}">
+            <strong>3</strong>
+          </div>
+          <h5 class="mb-0">🤖 Análisis ML Avanzado</h5>
+        </div>
+        <div class="card-body text-center">
+          {% if data_loaded %}
+            <div class="ml-ready">
+              <i class="fas fa-robot fa-3x text-danger mb-3"></i>
+              <h6 class="text-danger mb-3">IA Lista para Predicciones</h6>
+              <div class="d-grid gap-2">
+                <button class="btn btn-danger btn-lg" onclick="runMLAnalysis()">
+                  <i class="fas fa-brain me-2"></i>
+                  Ejecutar ML
+                </button>
+                <div class="btn-group-vertical w-100" role="group">
+                  <button class="btn btn-outline-warning btn-sm" onclick="runSpecificML('fr30')">FR-30 Predicción</button>
+                  <button class="btn btn-outline-info btn-sm" onclick="runSpecificML('rul')">RUL Análisis</button>
+                  <button class="btn btn-outline-secondary btn-sm" onclick="runSpecificML('anomaly')">Detección Anomalías</button>
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div class="ml-waiting">
+              <i class="fas fa-robot fa-3x text-muted mb-3"></i>
+              <h6 class="text-muted mb-3">IA en Espera</h6>
+              <p class="text-muted small">Los modelos de Machine Learning están listos para analizar tus datos</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel de resultados -->
+  {% if data_loaded %}
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-light">
+          <h5 class="mb-0">
+            <i class="fas fa-chart-bar me-2"></i>
+            Panel de Resultados
+          </h5>
+        </div>
+        <div class="card-body" id="results-panel">
+          <div class="row text-center">
+            <div class="col-md-3">
+              <div class="border rounded p-3">
+                <h3 class="text-primary">{{ stats.total_registros|default(0) }}</h3>
+                <small class="text-muted">Total Registros</small>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="border rounded p-3">
+                <h3 class="text-success">{{ stats.get('registros_cerrados', '---') }}</h3>
+                <small class="text-muted">Cerrados</small>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="border rounded p-3">
+                <h3 class="text-warning">{{ stats.get('registros_abiertos', '---') }}</h3>
+                <small class="text-muted">Abiertos</small>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="border rounded p-3">
+                <h3 class="text-info">{{ stats.get('fr30_count', '---') }}</h3>
+                <small class="text-muted">Equipos FR-30</small>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 text-center">
+            <small class="text-muted">Los resultados de análisis aparecerán aquí conforme ejecutes los pasos 2 y 3</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
-<!-- ⚠️ MODAL DE ERROR MEJORADO -->
-<div class="modal fade" id="errorModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Error de Procesamiento
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-danger mb-3">
-                    <strong>Detalles del error:</strong>
-                    <div id="error-details" class="mt-2"></div>
-                </div>
-                <p class="text-muted">
-                    <strong>Posibles soluciones:</strong>
-                </p>
-                <ul class="text-muted">
-                    <li>Verifica que el archivo tenga la hoja "Datos_Limpios"</li>
-                    <li>Asegúrate de que el formato sea .xlsx o .xls</li>
-                    <li>Revisa que el archivo no esté corrupto</li>
-                    <li>Intenta con un archivo más pequeño</li>
-                </ul>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-primary" onclick="reloadPage()">Intentar de Nuevo</button>
-            </div>
+<!-- Modal progreso -->
+<div class="modal fade" id="progressModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-body text-center p-4">
+        <div class="mb-3">
+          <div class="spinner-border text-primary" role="status" style="width:3rem;height:3rem;">
+            <span class="visually-hidden">Procesando...</span>
+          </div>
         </div>
+        <h5 id="progress-title">Procesando archivo...</h5>
+        <div class="progress mb-3" style="height:20px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated" id="progress-bar" role="progressbar" style="width:0%"></div>
+        </div>
+        <p class="text-muted mb-0" id="progress-details">Iniciando procesamiento...</p>
+      </div>
     </div>
+  </div>
+</div>
+
+<!-- Modal error -->
+<div class="modal fade" id="errorModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Error de Procesamiento</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger mb-3">
+          <strong>Detalles del error:</strong>
+          <div id="error-details" class="mt-2"></div>
+        </div>
+        <p class="text-muted"><strong>Posibles soluciones:</strong></p>
+        <ul class="text-muted">
+          <li>Verifica que el archivo tenga la hoja "Datos_Limpios"</li>
+          <li>Asegúrate de que el formato sea .xlsx o .xls</li>
+          <li>Revisa que el archivo no esté corrupto</li>
+          <li>Intenta con un archivo más pequeño</li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button type="button" class="btn btn-primary" onclick="reloadPage()">Intentar de Nuevo</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-// 🚀 JavaScript para el nuevo flujo de "Operación Claridad"
-
-// Variables globales
+// JS "Operación Claridad"
 let uploadInProgress = false;
 
-// Manejo de archivo seleccionado
 document.addEventListener('DOMContentLoaded', function() {
-    const fileInput = document.getElementById('file');
-    if (fileInput) {
-        fileInput.addEventListener('change', function() {
-            if (this.files.length > 0) {
-                handleFileSelection(this.files[0]);
-            }
-        });
-    }
-    
-    // Drag & Drop para zona de carga
-    const uploadZone = document.getElementById('upload-zone');
-    if (uploadZone) {
-        uploadZone.addEventListener('dragover', handleDragOver);
-        uploadZone.addEventListener('dragleave', handleDragLeave);
-        uploadZone.addEventListener('drop', handleDrop);
-    }
+  const fileInput = document.getElementById('file');
+  if (fileInput) {
+    fileInput.addEventListener('change', function() {
+      if (this.files.length > 0) handleFileSelection(this.files[0]);
+    });
+  }
+  const uploadZone = document.getElementById('upload-zone');
+  if (uploadZone) {
+    uploadZone.addEventListener('dragover', handleDragOver);
+    uploadZone.addEventListener('dragleave', handleDragLeave);
+    uploadZone.addEventListener('drop', handleDrop);
+  }
 });
 
-// Manejo de selección de archivo
 function handleFileSelection(file) {
-    if (uploadInProgress) return;
-    
-    // Validaciones
-    if (file.size > 50 * 1024 * 1024) {
-        showError('El archivo es demasiado grande. Máximo 50MB permitido.');
-        return;
-    }
-    
-    const allowedTypes = [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel'
-    ];
-    
-    if (!allowedTypes.includes(file.type)) {
-        showError('Formato no válido. Solo se permiten archivos .xlsx y .xls');
-        return;
-    }
-    
-    // Proceder con subida
-    uploadFile();
+  if (uploadInProgress) return;
+  if (file.size > 50 * 1024 * 1024) { showError('El archivo es demasiado grande. Máximo 50MB permitido.'); return; }
+  const allowed = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'];
+  if (!allowed.includes(file.type)) { showError('Formato no válido. Solo .xlsx y .xls'); return; }
+  uploadFile();
 }
 
-// Funciones de Drag & Drop
-function handleDragOver(e) {
-    e.preventDefault();
-    e.currentTarget.classList.add('border-primary', 'bg-light');
-}
+function handleDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('border-primary','bg-light'); }
+function handleDragLeave(e){ e.preventDefault(); e.currentTarget.classList.remove('border-primary','bg-light'); }
+function handleDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('border-primary','bg-light');
+  const files = e.dataTransfer.files; if (files.length>0){ document.getElementById('file').files = files; handleFileSelection(files[0]); } }
 
-function handleDragLeave(e) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('border-primary', 'bg-light');
-}
-
-function handleDrop(e) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('border-primary', 'bg-light');
-    
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        document.getElementById('file').files = files;
-        handleFileSelection(files[0]);
-    }
-}
-
-// Subir archivo con progreso
 function uploadFile() {
-    if (uploadInProgress) return;
-    
-    const form = document.getElementById('uploadForm');
-    const formData = new FormData(form);
-    
-    uploadInProgress = true;
-    showProgress('Subiendo archivo...', 0, 'Iniciando carga...');
-    
-    fetch(form.action, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(result => {
-        if (result.success) {
-            // Monitorear progreso
-            monitorProgress();
-        } else {
-            throw new Error(result.error || 'Error desconocido en la subida');
-        }
-    })
-    .catch(error => {
-        console.error('Error en subida:', error);
-        hideProgress();
-        showError(error.message);
-        uploadInProgress = false;
-    });
+  if (uploadInProgress) return;
+  const form = document.getElementById('uploadForm');
+  const formData = new FormData(form);
+  uploadInProgress = true;
+  showProgress('Subiendo archivo...', 0, 'Iniciando carga...');
+  fetch(form.action, { method: 'POST', body: formData })
+    .then(r => { if(!r.ok) throw new Error(`Error HTTP: ${r.status}`); return r.json(); })
+    .then(result => { if (result.success) { monitorProgress(); } else { throw new Error(result.error || 'Error desconocido'); } })
+    .catch(err => { hideProgress(); showError(err.message); uploadInProgress = false; });
 }
 
-// Monitorear progreso de procesamiento
 function monitorProgress() {
-    const checkProgress = () => {
-        fetch('/progress')
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                hideProgress();
-                showError(data.error);
-                uploadInProgress = false;
-                return;
-            }
-            
-            updateProgress(data.message, data.percentage, data.details);
-            
-            if (data.percentage >= 100) {
-                setTimeout(() => {
-                    hideProgress();
-                    location.reload(); // Recargar para mostrar datos
-                }, 1000);
-            } else {
-                setTimeout(checkProgress, 1000);
-            }
-        })
-        .catch(error => {
-            console.error('Error monitoreando progreso:', error);
-            hideProgress();
-            showError('Error monitoreando el progreso del archivo');
-            uploadInProgress = false;
-        });
-    };
-    
-    checkProgress();
+  const tick = () => {
+    fetch('/progress')
+      .then(r=>r.json())
+      .then(data=>{
+        if (data.error){ hideProgress(); showError(data.error); uploadInProgress=false; return; }
+        updateProgress(data.message || 'Procesando...', data.percentage || 0, data.details || '');
+        if ((data.percentage||0) >= 100){ setTimeout(()=>{ hideProgress(); location.reload(); }, 800); }
+        else { setTimeout(tick, 800); }
+      })
+      .catch(()=>{ hideProgress(); showError('Error monitoreando el progreso'); uploadInProgress=false; });
+  };
+  tick();
 }
 
-// Funciones de análisis
 function runStatisticalAnalysis() {
-    showProgress('Ejecutando análisis estadístico...', 0, 'Calculando KPIs y tendencias...');
-    
-    fetch('/analyze_statistics', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(result => {
-        hideProgress();
-        if (result.success) {
-            displayAnalysisResults(result.data, 'statistical');
-        } else {
-            showError(result.error || 'Error en análisis estadístico');
-        }
-    })
-    .catch(error => {
-        hideProgress();
-        showError('Error ejecutando análisis estadístico: ' + error.message);
-    });
+  showProgress('Ejecutando análisis estadístico...', 0, 'Calculando KPIs y tendencias...');
+  fetch('/analyze_statistics', { method:'POST', headers:{'Content-Type':'application/json'} })
+    .then(r=>r.json())
+    .then(result=>{ hideProgress(); if(result.success){ displayAnalysisResults(result.data,'statistical'); } else { showError(result.error||'Error en análisis'); } })
+    .catch(err=>{ hideProgress(); showError('Error ejecutando análisis: '+err.message); });
 }
 
 function runMLAnalysis() {
-    showProgress('Ejecutando análisis de Machine Learning...', 0, 'Entrenando modelos y generando predicciones...');
-    
-    fetch('/ml_analysis', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(result => {
-        hideProgress();
-        if (result.success) {
-            displayAnalysisResults(result.data, 'ml');
-        } else {
-            showError(result.error || 'Error en análisis ML');
-        }
-    })
-    .catch(error => {
-        hideProgress();
-        showError('Error ejecutando análisis ML: ' + error.message);
-    });
+  showProgress('Ejecutando análisis de Machine Learning...', 0, 'Entrenando modelos y generando predicciones...');
+  fetch('/ml_analysis', { method:'POST', headers:{'Content-Type':'application/json'} })
+    .then(r=>r.json())
+    .then(result=>{ hideProgress(); if(result.success){ displayAnalysisResults(result.data,'ml'); } else { showError(result.error||'Error en análisis ML'); } })
+    .catch(err=>{ hideProgress(); showError('Error ejecutando análisis ML: '+err.message); });
 }
 
 function runSpecificML(type) {
-    const titles = {
-        'fr30': 'Análisis FR-30',
-        'rul': 'Análisis RUL', 
-        'anomaly': 'Detección de Anomalías'
-    };
-    
-    showProgress(`Ejecutando ${titles[type]}...`, 0, 'Procesando con algoritmos especializados...');
-    
-    fetch(`/ml_specific/${type}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(result => {
-        hideProgress();
-        if (result.success) {
-            displayAnalysisResults(result.data, type);
-        } else {
-            showError(result.error || `Error en ${titles[type]}`);
-        }
-    })
-    .catch(error => {
-        hideProgress();
-        showError(`Error ejecutando ${titles[type]}: ` + error.message);
-    });
+  const titles = { fr30:'Análisis FR-30', rul:'Análisis RUL', anomaly:'Detección de Anomalías' };
+  showProgress(`Ejecutando ${titles[type]}...`, 0, 'Procesando...');
+  fetch(`/ml_specific/${type}`, { method:'POST', headers:{'Content-Type':'application/json'} })
+    .then(r=>r.json())
+    .then(result=>{ hideProgress(); if(result.success){ displayAnalysisResults(result.data,type); } else { showError(result.error||`Error en ${titles[type]}`); } })
+    .catch(err=>{ hideProgress(); showError(`Error ejecutando ${titles[type]}: `+err.message); });
 }
 
-// Mostrar resultados de análisis
 function displayAnalysisResults(data, type) {
-    const panel = document.getElementById('results-panel');
-    if (!panel) return;
-    
-    const resultHTML = `
-        <div class="alert alert-success">
-            <h6><i class="fas fa-check-circle me-2"></i>Análisis ${type.toUpperCase()} Completado</h6>
-        </div>
-        <div class="row">
-            <div class="col-12">
-                <pre class="bg-light p-3 rounded"><code>${JSON.stringify(data, null, 2)}</code></pre>
-            </div>
-        </div>
-    `;
-    
-    panel.innerHTML = resultHTML;
+  const panel = document.getElementById('results-panel'); if (!panel) return;
+  panel.innerHTML = `
+    <div class="alert alert-success">
+      <h6><i class="fas fa-check-circle me-2"></i>Análisis ${type.toUpperCase()} Completado</h6>
+    </div>
+    <div class="row"><div class="col-12">
+      <pre class="bg-light p-3 rounded"><code>${JSON.stringify(data, null, 2)}</code></pre>
+    </div></div>`;
 }
 
-// Utilidades de UI
 function showProgress(title, percentage, details) {
-    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
-    updateProgress(title, percentage, details);
-    modal.show();
+  document.getElementById('progress-title').textContent = title;
+  document.getElementById('progress-bar').style.width = (percentage||0) + '%';
+  document.getElementById('progress-details').textContent = details || '';
+  const modal = new bootstrap.Modal(document.getElementById('progressModal')); modal.show();
 }
-
 function updateProgress(title, percentage, details) {
-    document.getElementById('progress-title').textContent = title;
-    document.getElementById('progress-bar').style.width = percentage + '%';
-    document.getElementById('progress-details').textContent = details;
+  document.getElementById('progress-title').textContent = title || 'Procesando...';
+  document.getElementById('progress-bar').style.width = (percentage||0) + '%';
+  document.getElementById('progress-details').textContent = details || '';
 }
-
 function hideProgress() {
-    const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
-    if (modal) modal.hide();
+  const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
+  if (modal) modal.hide();
 }
-
 function showError(message) {
-    document.getElementById('error-details').textContent = message;
-    const modal = new bootstrap.Modal(document.getElementById('errorModal'));
-    modal.show();
+  document.getElementById('error-details').textContent = message;
+  const modal = new bootstrap.Modal(document.getElementById('errorModal')); modal.show();
 }
-
-function reloadPage() {
-    location.reload();
-}
+function reloadPage(){ location.reload(); }
 </script>
 
 {% endblock %}
