@@ -211,26 +211,41 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
     
     df_norm = df.copy()
     
-    # Normalizar fechas si existen - Versión robusta
-    date_columns = ['fecha', 'fecha_inicio', 'fecha_fin', 'date']
+    # Normalizar fechas si existen - Versión robusta para COTEMA
+    date_columns = ['fecha', 'fecha_inicio', 'fecha_fin', 'date', 'fecha_in', 'fecha_out']
     for col in date_columns:
         if col in df_norm.columns:
             try:
-                # Convertir a datetime y asignar los valores directamente para evitar problemas de índice
-                converted_dates = pd.to_datetime(df_norm[col], errors='coerce')
-                
-                # Contar conversiones exitosas
-                converted_count = converted_dates.notna().sum()
-                total_count = df_norm[col].notna().sum()
-
-                if converted_count > 0:
-                    df_norm[col] = converted_dates.values
-                    logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos)")
+                # Para FECHA OUT, mantener valores vacíos (registros abiertos)
+                if 'out' in col.lower():
+                    # Filtrar solo valores no vacíos para conversión
+                    mask_not_empty = df_norm[col].notna() & (df_norm[col] != '') & (df_norm[col] != 'nan')
+                    if mask_not_empty.any():
+                        # Convertir solo valores no vacíos
+                        temp_series = df_norm[col].copy()
+                        converted_values = pd.to_datetime(temp_series[mask_not_empty], errors='coerce')
+                        temp_series[mask_not_empty] = converted_values
+                        df_norm[col] = temp_series.values
+                        converted_count = converted_values.notna().sum()
+                        total_count = mask_not_empty.sum()
+                        logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos, manteniendo registros abiertos)")
+                    else:
+                        logging.info(f"📅 Columna {col} sin fechas válidas - todos los registros están abiertos")
                 else:
-                    logging.warning(f"⚠️ No se pudieron convertir fechas en {col}, manteniendo como texto")
+                    # Para otras columnas de fecha, conversión normal
+                    converted_dates = pd.to_datetime(df_norm[col], errors='coerce')
+                    converted_count = converted_dates.notna().sum()
+                    total_count = df_norm[col].notna().sum()
+
+                    if converted_count > 0:
+                        df_norm[col] = converted_dates.values
+                        logging.info(f"📅 Columna {col} normalizada como fecha ({converted_count}/{total_count} valores convertidos)")
+                    else:
+                        logging.warning(f"⚠️ No se pudieron convertir fechas en {col}, manteniendo como texto")
                     
             except Exception as e:
                 logging.warning(f"⚠️ Error normalizando fechas en {col}: {e}")
+                # En caso de error, mantener valores originales
     
     # Normalizar códigos de equipo
     if 'equipo' in df_norm.columns:
