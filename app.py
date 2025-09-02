@@ -704,6 +704,24 @@ def api_status():
         'version': '3.1.0'
     })
 
+# --------------------------------------
+# Rutas adicionales para compatibilidad con templates
+# --------------------------------------
+@app.route('/predictions')
+def predictions_dashboard():
+    """Ruta de predicciones - redirige al dashboard principal por ahora"""
+    return redirect('/dashboard')
+
+@app.route('/ia-documentation')
+def ia_documentation():
+    """Documentación de IA"""
+    try:
+        return render_template('ia_documentation.html')
+    except Exception as e:
+        logger.exception(f"ia_documentation error: {e}")
+        flash('Documentación no disponible temporalmente.', 'warning')
+        return redirect('/')
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
