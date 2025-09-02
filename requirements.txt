@@ -6,6 +6,5 @@ pandas
 numpy
 scikit-learn
 plotly
-celery
-redis
 pytz
+xgboost

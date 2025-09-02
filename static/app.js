@@ -1222,149 +1222,84 @@ const KPIManager = {
 
 // Event listeners y inicialización
 document.addEventListener('DOMContentLoaded', function() {
-    // ... (código de inicialización existente como tooltips)
+    // Inicializar tooltips de Bootstrap
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 
+    // Auto-hide alerts después de 5 segundos
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert-floating .alert');
+        alerts.forEach(alert => {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 5000);
+
+    // Validación básica del formulario de upload (sin interferir con el manejo principal)
     const uploadForm = document.getElementById('uploadForm');
-    if (uploadForm) {
+    if (uploadForm && !uploadForm.hasAttribute('data-enhanced')) {
+        uploadForm.setAttribute('data-enhanced', 'true');
         uploadForm.addEventListener('submit', function(e) {
-            e.preventDefault(); // Prevenir el envío normal del formulario
-            uploadAndProcessFile(this);
+            const fileInput = document.getElementById('file');
+            
+            if (fileInput && fileInput.files.length === 0) {
+                e.preventDefault();
+                Utils.showNotification('Por favor selecciona un archivo', 'warning');
+                return;
+            }
+
+            if (fileInput && fileInput.files.length > 0) {
+                const validation = Utils.validateExcelFile(fileInput.files[0]);
+                if (!validation.valid) {
+                    e.preventDefault();
+                    Utils.showNotification(validation.error, 'error');
+                    return;
+                }
+            }
+
+            // Mostrar loading en el botón
+            const uploadBtn = document.getElementById('uploadBtn');
+            if (uploadBtn) {
+                uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+                uploadBtn.disabled = true;
+            }
         });
     }
 
-    // ... (resto del código de inicialización)
+    // Función global para calcular KPIs (llamada desde el HTML)
+    window.calculateKPIs = function() {
+        const mesSelect = document.getElementById('mesSelect');
+        if (mesSelect) {
+            KPIManager.calculate(mesSelect.value);
+        }
+    };
+
+    // Función global para análisis de frecuencia (llamada desde el HTML)
+    window.analyzeFrequency = function() {
+        FrequencyAnalysisManager.analyze();
+    };
+
+    // Función global para entrenar ML real (llamada desde el HTML)
+    window.trainRealML = function() {
+        RealMLManager.trainModels();
+    };
+
+    // Test de conexión inicial
+    APIClient.connectionTest()
+        .then(data => {
+            console.log('Conexión establecida:', data);
+        })
+        .catch(error => {
+            console.warn('Error en test de conexión:', error);
+        });
 });
-
-/**
- * Maneja la carga del archivo, el monitoreo de progreso y la redirección.
- * @param {HTMLFormElement} form - El formulario de carga.
- */
-function uploadAndProcessFile(form) {
-    const fileInput = form.querySelector('input[type="file"]');
-    const uploadBtn = form.querySelector('button[type="submit"]');
-    const progressContainer = document.getElementById('upload-progress-container');
-    const progressBar = document.getElementById('progress-bar');
-    const progressMessage = document.getElementById('progress-message');
-    const progressTitle = document.getElementById('progress-title');
-
-    if (fileInput.files.length === 0) {
-        Utils.showNotification('Por favor, selecciona un archivo.', 'warning');
-        return;
-    }
-
-    const file = fileInput.files[0];
-    const validation = Utils.validateExcelFile(file);
-    if (!validation.valid) {
-        Utils.showNotification(validation.error, 'error');
-        return;
-    }
-
-    // Deshabilitar botón y mostrar progreso
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
-    progressContainer.style.display = 'block';
-    progressTitle.textContent = `Cargando "${file.name}"...`;
-
-    const formData = new FormData(form);
-
-    // 1. Enviar el archivo al backend
-    fetch('/upload', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            // Si la respuesta inicial falla (ej. error 500 inmediato)
-            throw new Error(`Error del servidor: ${response.statusText}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            // 2. Si el backend confirma el inicio, empezar a monitorear
-            progressTitle.textContent = 'Procesando datos en el servidor...';
-            startProgressMonitoring(progressBar, progressMessage);
-        } else {
-            // Si el backend devuelve un error de inmediato
-            throw new Error(data.error || 'Error desconocido al iniciar la carga.');
-        }
-    })
-    .catch(error => {
-        // Capturar errores de red o del paso 1
-        console.error('Error en la carga inicial:', error);
-        Utils.showNotification(error.message, 'error');
-        resetUploadUI(uploadBtn, progressContainer);
-    });
-}
-
-/**
- * Inicia el monitoreo periódico del endpoint /progress.
- * @param {HTMLElement} progressBar - El elemento de la barra de progreso.
- * @param {HTMLElement} progressMessage - El elemento para mostrar mensajes de estado.
- */
-function startProgressMonitoring(progressBar, progressMessage) {
-    const intervalId = setInterval(() => {
-        fetch('/progress')
-            .then(response => response.json())
-            .then(data => {
-                // Actualizar la UI con el progreso
-                const percent = data.progress || 0;
-                progressBar.style.width = `${percent}%`;
-                progressBar.textContent = `${percent}%`;
-                progressBar.setAttribute('aria-valuenow', percent);
-                progressMessage.textContent = data.message || '...';
-
-                if (data.error) {
-                    // 3a. Si el backend reporta un error durante el procesamiento
-                    clearInterval(intervalId);
-                    throw new Error(data.error);
-                }
-
-                if (!data.is_processing && percent === 100) {
-                    // 3b. Si el procesamiento termina exitosamente
-                    clearInterval(intervalId);
-                    progressMessage.textContent = '¡Procesamiento completado! Redirigiendo...';
-                    progressBar.classList.remove('progress-bar-animated');
-                    progressBar.classList.add('bg-success');
-                    
-                    // 4. Redirigir al dashboard para ver los resultados
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1500); // Esperar un poco para que el usuario vea el mensaje
-                }
-            })
-            .catch(error => {
-                // Capturar errores durante el monitoreo
-                clearInterval(intervalId);
-                console.error('Error durante el monitoreo de progreso:', error);
-                Utils.showNotification(error.message, 'error');
-                const uploadBtn = document.getElementById('uploadBtn');
-                const progressContainer = document.getElementById('upload-progress-container');
-                resetUploadUI(uploadBtn, progressContainer);
-            });
-    }, 1500); // Consultar cada 1.5 segundos
-}
-
-/**
- * Restaura la UI de carga a su estado inicial.
- * @param {HTMLElement} uploadBtn - El botón de carga.
- * @param {HTMLElement} progressContainer - El contenedor del progreso.
- */
-function resetUploadUI(uploadBtn, progressContainer) {
-    if (uploadBtn) {
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Cargar y Procesar Datos';
-    }
-    if (progressContainer) {
-        progressContainer.style.display = 'none';
-    }
-}
-
-// ... (resto de tu código de app.js)
-// Asegúrate de que las funciones globales como calculateKPIs, etc., se mantengan si las usas en otros lugares.
-// ...
 
 // Exportar funciones para uso global
 window.Utils = Utils;
-// ... (resto de tus exportaciones)
-
+window.APIClient = APIClient;
+window.ChartGenerator = ChartGenerator;
+window.KPIManager = KPIManager;
+window.FrequencyAnalysisManager = FrequencyAnalysisManager;
+window.RealMLManager = RealMLManager;

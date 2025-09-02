@@ -338,8 +338,12 @@ class RealCOTEMAMLEngine:
             return False
         
         try:
-            print("🤖 Iniciando entrenamiento de Machine Learning REAL...")
+            print("🤖 Iniciando entrenamiento de Machine Learning REAL con datos proporcionados...")
             
+            if df is None or df.empty:
+                print("❌ DataFrame de entrada está vacío. No se puede entrenar.")
+                return False
+
             # 1. Feature Engineering automático
             features_df, original_df = self.automatic_feature_engineering(df)
             

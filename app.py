@@ -13,22 +13,10 @@ import threading
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-@app.route('/ml-status')
-def ml_status():
-    """Devuelve el estado del análisis profundo y el entrenamiento ML."""
-    status = {
-        'deep_analysis_in_progress': global_data.get('deep_analysis_in_progress', False),
-        'ml_models_trained': global_data.get('ml_models_trained', False),
-        'analysis_type': global_data.get('analysis_type', ''),
-        'ml_progress': global_data.get('ml_progress', {'percent': 0, 'step': '', 'processed': 0, 'total': 0})
-    }
-    return jsonify(status)
-
-# Endpoint para consultar el progreso de carga/procesamiento
-@app.route('/progress', methods=['GET'])
-def get_progress():
-    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
-    return jsonify(progress_state)
+# Configuración de la carga de archivos
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'xlsx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Importaciones condicionales de ML - con manejo robusto de errores
 try:
@@ -41,9 +29,12 @@ ML_AVAILABLE = False
 if pd:
     try:
         import numpy as np
-        from sklearn.ensemble import IsolationForest, RandomForestRegressor
+        from sklearn.ensemble import IsolationForest, RandomForestRegressor, RandomForestClassifier
         from sklearn.preprocessing import StandardScaler
         from sklearn.linear_model import LinearRegression
+        from sklearn.model_selection import train_test_split, cross_val_score
+        from sklearn.metrics import mean_squared_error, silhouette_score
+        from sklearn.cluster import KMeans
         import plotly.graph_objects as go
         from plotly.utils import PlotlyJSONEncoder
         ML_AVAILABLE = True
@@ -53,30 +44,129 @@ if pd:
 
 # Importar motor de ML REAL
 REAL_ML_AVAILABLE = False
+ml_engine_instance = None
 try:
     from src.real_ml_engine import RealCOTEMAMLEngine
     REAL_ML_AVAILABLE = True
-    print("✅ Real ML Engine loaded successfully")
+    ml_engine_instance = RealCOTEMAMLEngine()
+    print("✅ Real ML Engine loaded and instantiated successfully")
 except ImportError as e:
     REAL_ML_AVAILABLE = False
     print(f"⚠️ Real ML Engine not available: {e}")
 except Exception as e:
     REAL_ML_AVAILABLE = False
     print(f"❌ Error loading Real ML Engine: {e}")
+    traceback.print_exc()
 
 import traceback
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Inicialización de la aplicación Flask
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
+# Almacenamiento en memoria para datos y estado de la aplicación
+global_data = {
+    'df': None,
+    'file_path': None,
+    'file_name': None,
+    'processed_date': None,
+    'ml_models_trained': False,
+    'deep_analysis_in_progress': False,
+    'ml_progress': {'percent': 0, 'step': 'Inicio'},
+    'analysis_type': ''
+}
 
-# Configuración de la carga de archivos
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'xlsx'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+progress_state = {
+    'current_task': '',
+    'progress': 0,
+    'is_processing': False,
+    'message': '',
+    'error': None,
+    'total_steps': 0,
+    'current_step': 0
+}
+
+def run_deep_analysis_background(df_copy):
+    """Función para ejecutar el entrenamiento de ML en segundo plano."""
+    global global_data, ml_engine_instance
+    
+    try:
+        global_data['deep_analysis_in_progress'] = True
+        global_data['ml_models_trained'] = False
+        global_data['analysis_type'] = 'real_data'
+        global_data['ml_progress'] = {'percent': 5, 'step': 'Iniciando motor de ML...'}
+        
+        if not ml_engine_instance:
+            logging.error("Instancia del motor de ML no está disponible.")
+            raise RuntimeError("ML Engine not initialized.")
+
+        logging.info("Iniciando entrenamiento de modelos de ML en background...")
+        
+        # Aquí puedes actualizar el progreso si tu función de entrenamiento lo soporta
+        # Por ahora, simulamos un progreso simple
+        global_data['ml_progress'] = {'percent': 20, 'step': 'Procesando y generando features...'}
+        
+        # Llamada a la función de entrenamiento real
+        training_success = ml_engine_instance.train_real_ml_models(df_copy)
+        
+        if training_success:
+            global_data['ml_models_trained'] = True
+            global_data['ml_progress'] = {'percent': 100, 'step': '¡Modelos entrenados exitosamente!'}
+            logging.info("Entrenamiento de ML completado exitosamente.")
+        else:
+            global_data['ml_models_trained'] = False
+            global_data['ml_progress'] = {'percent': 100, 'step': 'Error durante el entrenamiento.'}
+            logging.error("El entrenamiento de ML falló.")
+
+    except Exception as e:
+        logging.error(f"Error catastrófico en el hilo de análisis profundo: {e}")
+        traceback.print_exc()
+        global_data['ml_progress'] = {'percent': 100, 'step': f'Error crítico: {e}'}
+    finally:
+        global_data['deep_analysis_in_progress'] = False
+        logging.info("El proceso de análisis profundo ha finalizado.")
+
+@app.route('/deep-analysis', methods=['POST'])
+def start_deep_analysis():
+    """Inicia el proceso de entrenamiento de ML en segundo plano."""
+    global global_data
+    
+    if global_data.get('deep_analysis_in_progress', False):
+        return jsonify({'status': 'error', 'message': 'El análisis profundo ya está en progreso.'}), 409
+
+    if global_data['df'] is None or global_data['df'].empty:
+        return jsonify({'status': 'error', 'message': 'No hay datos cargados para analizar. Por favor, suba un archivo primero.'}), 400
+
+    if not REAL_ML_AVAILABLE or not ml_engine_instance:
+        return jsonify({'status': 'error', 'message': 'El motor de Machine Learning no está disponible.'}), 500
+
+    logging.info("Recibida solicitud para iniciar análisis profundo.")
+    
+    # Copiamos el dataframe para evitar problemas de concurrencia
+    df_copy = global_data['df'].copy()
+    
+    # Iniciar el entrenamiento en un hilo separado
+    thread = threading.Thread(target=run_deep_analysis_background, args=(df_copy,))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({'status': 'success', 'message': 'El análisis profundo ha comenzado. El estado se actualizará en segundo plano.'})
+
+@app.route('/ml-status')
+def ml_status():
+    """Devuelve el estado del análisis profundo y el entrenamiento ML."""
+    status = {
+        'deep_analysis_in_progress': global_data.get('deep_analysis_in_progress', False),
+        'ml_models_trained': global_data.get('ml_models_trained', False),
+        'analysis_type': global_data.get('analysis_type', ''),
+        'ml_progress': global_data.get('ml_progress', {'percent': 0, 'step': ''})
+    }
+    return jsonify(status)
+
+# Endpoint para consultar el progreso de carga/procesamiento
+@app.route('/progress', methods=['GET'])
+def get_progress():
+    """Devuelve el estado de progreso actual para la carga/procesamiento de archivos"""
+    return jsonify(progress_state)
 
 # Almacenamiento en memoria para datos y estado de la aplicación
 global_data = {
