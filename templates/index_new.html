@@ -2,6 +2,22 @@
 
 {% block title %}COTEMA - Análisis Predictivo{% endblock %}
 
+{% block extra_css %}
+<style>
+  .grad-success { background: linear-gradient(135deg, #28a745, #20c997); color: #fff; }
+  .grad-danger  { background: linear-gradient(135deg, #dc3545, #fd7e14); color: #fff; }
+  .grad-secondary { background: #6c757d; color: #fff; }
+  .step-number  { width: 40px; height: 40px; }
+  .upload-zone  { border: 2px dashed #ced4da; border-radius: .5rem; padding: 1.5rem; }
+  .step-active { background: linear-gradient(135deg, #28a745, #20c997); color: white; }
+  .step-inactive { background: #6c757d; color: white; }
+  .step-danger { background: linear-gradient(135deg, #dc3545, #fd7e14); color: white; }
+  .step-number-active { color: #28a745; }
+  .step-number-inactive { color: #6c757d; }
+  .step-number-danger { color: #dc3545; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4 py-3">
     <!-- 🎯 OPERACIÓN CLARIDAD - Header Minimalista -->
@@ -80,10 +96,8 @@
         <!-- PASO 2: ANÁLISIS ESTADÍSTICO FR-30 -->
         <div class="col-lg-4">
             <div class="card h-100 border-0 shadow-sm" id="step2-card">
-                <div class="card-header text-center py-3" 
-                     style="background: {{ 'linear-gradient(135deg, #28a745, #20c997)' if data_loaded else '#6c757d' }}; color: white;">
-                    <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                         style="width: 40px; height: 40px; color: {{ '#28a745' if data_loaded else '#6c757d' }};">
+                <div class="card-header text-center py-3 {{ 'step-active' if data_loaded else 'step-inactive' }}">
+                    <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2 {{ 'step-number-active' if data_loaded else 'step-number-inactive' }}">
                         <strong>2</strong>
                     </div>
                     <h5 class="mb-0">📈 Análisis Estadístico FR-30</h5>
@@ -129,10 +143,8 @@
         <!-- PASO 3: ANÁLISIS ML AVANZADO -->
         <div class="col-lg-4">
             <div class="card h-100 border-0 shadow-sm" id="step3-card">
-                <div class="card-header text-center py-3" 
-                     style="background: {{ 'linear-gradient(135deg, #dc3545, #fd7e14)' if data_loaded else '#6c757d' }}; color: white;">
-                    <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2" 
-                         style="width: 40px; height: 40px; color: {{ '#dc3545' if data_loaded else '#6c757d' }};">
+                <div class="card-header text-center py-3 {{ 'step-danger' if data_loaded else 'step-inactive' }}">
+                    <div class="step-number bg-white rounded-circle d-inline-flex align-items-center justify-content-center mb-2 {{ 'step-number-danger' if data_loaded else 'step-number-inactive' }}">
                         <strong>3</strong>
                     </div>
                     <h5 class="mb-0">🤖 Análisis ML Avanzado</h5>
