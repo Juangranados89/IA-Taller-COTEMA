@@ -311,7 +311,11 @@ function monitorProgress() {
 
 function runStatisticalAnalysis() {
   showProgress('Ejecutando análisis estadístico...', 0, 'Calculando KPIs y tendencias...');
-  fetch('/analyze_statistics', { method:'POST', headers:{'Content-Type':'application/json'} })
+  fetch('/analyze_statistics', { 
+    method:'POST', 
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({days: 30})
+  })
     .then(r=>r.json())
     .then(result=>{ hideProgress(); if(result.success){ displayAnalysisResults(result.data,'statistical'); } else { showError(result.error||'Error en análisis'); } })
     .catch(err=>{ hideProgress(); showError('Error ejecutando análisis: '+err.message); });
@@ -319,7 +323,11 @@ function runStatisticalAnalysis() {
 
 function runMLAnalysis() {
   showProgress('Ejecutando análisis de Machine Learning...', 0, 'Entrenando modelos y generando predicciones...');
-  fetch('/ml_analysis', { method:'POST', headers:{'Content-Type':'application/json'} })
+  fetch('/ml_analysis', { 
+    method:'POST', 
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  })
     .then(r=>r.json())
     .then(result=>{ hideProgress(); if(result.success){ displayAnalysisResults(result.data,'ml'); } else { showError(result.error||'Error en análisis ML'); } })
     .catch(err=>{ hideProgress(); showError('Error ejecutando análisis ML: '+err.message); });

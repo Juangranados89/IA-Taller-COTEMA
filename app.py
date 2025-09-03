@@ -635,9 +635,14 @@ def analyze_statistics():
         # Obtener días de manera más robusta
         days = 30  # valor por defecto
         try:
-            request_data = request.get_json() or {}
+            # Intentar obtener JSON, pero no fallar si no hay contenido
+            if request.content_type and 'application/json' in request.content_type:
+                request_data = request.get_json(silent=True) or {}
+            else:
+                request_data = {}
             days = int(request_data.get('days', 30))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, Exception) as e:
+            logger.warning(f"Error obteniendo días del request: {e}")
             days = 30
 
         update_progress("Analizando estadísticas", 1, 2, f"Analizando últimos {days} días...")
