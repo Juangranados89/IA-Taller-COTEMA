@@ -95,16 +95,29 @@ def _strip_accents(s: str) -> str:
     return "".join(ch for ch in nf if unicodedata.category(ch) != "Mn")
 
 
-def _sanitize_columns(cols: List[str]) -> List[str]:
-    """Normaliza nombres: lower, sin acentos, separadores a _, solo [a-z0-9_]."""
-    out = []
-    for c in cols:
-        c = str(c).strip()
-        c = _strip_accents(c).lower()
-        c = re.sub(r"[^a-z0-9]+", "_", c)  # no letras/numeros -> _
-        c = c.strip("_")
-        out.append(c or "col")
-    return out
+def _sanitize_columns(columns: List[str]) -> List[str]:
+    """Sanitiza nombres de columnas: normaliza, remueve caracteres especiales."""
+    sanitized = []
+    for col in columns:
+        # Normalizar unicode y remover acentos
+        clean = unicodedata.normalize('NFKD', str(col)).encode('ascii', 'ignore').decode('ascii')
+        # Solo letras, números y guiones bajos
+        clean = re.sub(r'[^\w]', '_', clean.lower())
+        # Reducir múltiples guiones bajos
+        clean = re.sub(r'_+', '_', clean).strip('_')
+        # Mapeos adicionales para compatibilidad con diferentes archivos
+        mappings = {
+            'equipo': 'codigo',
+            'fecha': 'fecha_in', 
+            'estado': 'tipo_atencion',
+            'prioridad': 'tipo_atencion',
+            'descripcion': 'sistema_afectado',
+            'horas_trabajo': 'horometro_in',
+            'tecnico': 'ejecutor'
+        }
+        clean = mappings.get(clean, clean)
+        sanitized.append(clean)
+    return sanitized
 
 
 # --------------------------------------------------------------------------------------
@@ -285,6 +298,24 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
     for cat in ("tipo_atencion", "sistema_afectado", "origen_averia", "atencion_local", "atencion_externa"):
         if cat in df_norm.columns:
             s = df_norm[cat].astype(str).str.strip().str.upper()
+            
+            # Mapeos especiales para tipo_atencion para compatibilidad con diferentes archivos
+            if cat == "tipo_atencion":
+                # Mapear valores comunes de estado/prioridad a tipos de atención
+                s = s.replace({
+                    'COMPLETADO': 'CORRECTIVA',
+                    'PENDIENTE': 'CORRECTIVA', 
+                    'EN_PROCESO': 'CORRECTIVA',
+                    'PROGRAMADO': 'PREVENTIVA',
+                    'ALTA': 'CORRECTIVA',
+                    'MEDIA': 'CORRECTIVA',
+                    'BAJA': 'PREVENTIVA',
+                    'CRITICAL': 'CORRECTIVA',
+                    'HIGH': 'CORRECTIVA',
+                    'MEDIUM': 'CORRECTIVA',
+                    'LOW': 'PREVENTIVA'
+                })
+            
             df_norm[cat] = s.replace({"NAN": np.nan, "NONE": np.nan, "": np.nan})
 
     return df_norm

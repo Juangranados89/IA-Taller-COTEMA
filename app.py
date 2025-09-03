@@ -49,7 +49,7 @@ global_data = {
 
 progress_state = {
     'current_task': '',
-    'progress': 0,
+    'percentage': 0,  # Cambiado de 'progress' a 'percentage'
     'is_processing': False,
     'message': '',
     'error': None,
@@ -62,7 +62,7 @@ def update_progress(task, step, total_steps, message=""):
         'current_task': task,
         'current_step': step,
         'total_steps': total_steps,
-        'progress': int((step / total_steps) * 100) if total_steps else 0,
+        'percentage': int((step / total_steps) * 100) if total_steps else 0,  # Cambiado de 'progress' a 'percentage'
         'is_processing': step < total_steps,
         'message': message,
         'error': None
@@ -71,7 +71,7 @@ def update_progress(task, step, total_steps, message=""):
 def reset_progress():
     progress_state.update({
         'current_task': '',
-        'progress': 0,
+        'percentage': 0,  # Cambiado de 'progress' a 'percentage'
         'is_processing': False,
         'message': '',
         'error': None,
@@ -83,7 +83,7 @@ def set_progress_error(error_message):
     progress_state.update({
         'is_processing': False,
         'error': error_message,
-        'progress': 0
+        'percentage': 0  # Cambiado de 'progress' a 'percentage'
     })
 
 # --------------------------------------
@@ -321,7 +321,11 @@ def index():
 
 @app.route('/progress', methods=['GET'])
 def get_progress():
-    return jsonify(progress_state)
+    # Adaptar al formato que espera el frontend
+    response = progress_state.copy()
+    response['percentage'] = response.get('progress', 0)
+    response['details'] = response.get('message', '')
+    return jsonify(response)
 
 @app.route('/ml-status')
 def ml_status():
@@ -390,11 +394,26 @@ def process_uploaded_file(filepath, filename):
 
         xl = pd.ExcelFile(filepath)  # usa engine por defecto disponible
         sheets = xl.sheet_names
-        # Prioriza 'Datos_Limpios' si existe
-        sheet = 'Datos_Limpios' if 'Datos_Limpios' in sheets else sheets[0]
+        logger.info(f"Hojas disponibles en {filename}: {sheets}")
+        
+        # Prioriza hojas comunes de COTEMA
+        preferred_sheets = ['Datos_Limpios', 'datos_limpios', 'REG', 'MAQUINARIA', 'BD1', 'BI']
+        sheet = None
+        
+        for preferred in preferred_sheets:
+            if preferred in sheets:
+                sheet = preferred
+                logger.info(f"Usando hoja preferida: {sheet}")
+                break
+        
+        if sheet is None:
+            sheet = sheets[0]
+            logger.info(f"Usando primera hoja disponible: {sheet}")
 
+        update_progress("Normalizando", 3, 4, f"Procesando hoja '{sheet}'...")
         df_raw = pd.read_excel(filepath, sheet_name=sheet)
-        update_progress("Normalizando", 3, 4, "Procesando datos...")
+        logger.info(f"Datos leídos: {len(df_raw)} filas, {len(df_raw.columns)} columnas")
+        logger.info(f"Columnas encontradas: {list(df_raw.columns)[:10]}")  # Primeras 10 columnas
 
         dataset, quality, catalogs = process_cotema_data(df_raw)
 
@@ -408,7 +427,7 @@ def process_uploaded_file(filepath, filename):
         global_data['processed_date'] = datetime.now()
         global_data['ml_models_trained'] = False
 
-        # Stats para portada
+        # Stats para portada con más información
         errores_detectados = 0
         for v in quality.get('errores', {}).values():
             if isinstance(v, (int, float)):
@@ -425,15 +444,23 @@ def process_uploaded_file(filepath, filename):
             'sheet_used': sheet,
             'available_sheets': sheets,
             'file_loaded': True,
-            'processing_time': processing_time
+            'processing_time': processing_time,
+            'columnas_procesadas': len(global_data['df'].columns),
+            'columnas_criticas': {
+                'fecha_in': 'fecha_in' in global_data['df'].columns,
+                'tipo_atencion': 'tipo_atencion' in global_data['df'].columns,
+                'codigo': 'codigo' in global_data['df'].columns
+            }
         }
 
-        update_progress("Completado", 4, 4, f"Procesado en {processing_time}s")
-        logger.info(f"Procesado OK: {filename} en {processing_time}s")
+        update_progress("Completado", 4, 4, f"Procesado en {processing_time}s - {len(global_data['df'])} registros")
+        logger.info(f"Procesado OK: {filename} en {processing_time}s - {len(global_data['df'])} registros")
 
     except Exception as e:
         logger.exception(f"process_uploaded_file error: {e}")
         set_progress_error(f"Error procesando archivo: {str(e)}")
+        # También log para debugging
+        logger.error(f"Detalles del error en {filename}: {str(e)}")
 
 # --------------------------------------
 # Dashboard y KPIs
@@ -603,7 +630,7 @@ def analyze_statistics():
     try:
         df = global_data.get('df')
         if df is None or df.empty:
-            return jsonify({'success': True, 'data': {'top_equipos': [], 'total_correctivas_en_ventana': 0, 'equipos_con_correctivas': 0}})
+            return jsonify({'success': True, 'data': {'top_equipos': [], 'total_correctivas_en_ventana': 0, 'equipos_con_correctivas': 0, 'debug': 'No hay datos cargados'}})
 
         # Obtener días de manera más robusta
         days = 30  # valor por defecto
@@ -614,6 +641,24 @@ def analyze_statistics():
             days = 30
 
         update_progress("Analizando estadísticas", 1, 2, f"Analizando últimos {days} días...")
+        
+        # Debug información
+        debug_info = {
+            'total_registros': len(df),
+            'columnas': list(df.columns),
+            'tiene_fecha_in': 'fecha_in' in df.columns,
+            'tiene_tipo_atencion': 'tipo_atencion' in df.columns,
+            'tiene_codigo': 'codigo' in df.columns,
+        }
+        
+        # Verificar si las columnas necesarias existen
+        if 'fecha_in' in df.columns:
+            debug_info['fechas_validas'] = df['fecha_in'].notna().sum()
+        if 'tipo_atencion' in df.columns:
+            debug_info['tipos_atencion'] = df['tipo_atencion'].value_counts().to_dict()
+        if 'codigo' in df.columns:
+            debug_info['equipos_unicos'] = df['codigo'].nunique()
+        
         fr30 = get_fr30_analysis(df, days=days)
         
         # Agregar información adicional al análisis
@@ -622,6 +667,7 @@ def analyze_statistics():
             'analysis_method': 'Real data FR-30',
             'total_registros_dataset': len(df),
             'columnas_disponibles': list(df.columns),
+            'debug_info': debug_info,
             'timestamp': datetime.now().isoformat()
         }
         
@@ -630,7 +676,8 @@ def analyze_statistics():
         
         return jsonify({'success': True, 'data': enhanced_data})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        logger.exception(f"analyze_statistics error: {e}")
+        return jsonify({'success': False, 'error': str(e), 'debug': 'Error en el análisis'})
 
 @app.route('/api/frequency-analysis')
 def frequency_analysis():
@@ -765,6 +812,71 @@ def ml_prediction():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/ml_specific/<analysis_type>', methods=['POST'])
+def ml_specific(analysis_type):
+    """Endpoints específicos para FR-30, RUL y Anomalías.
+
+    Responde a las llamadas del front-end `/ml_specific/<type>` para:
+      - fr30: riesgo de falla en 30 días por equipo
+      - rul: estimación de días restantes (si el modelo está disponible)
+      - anomaly: score de anomalía por equipo
+    """
+    try:
+        df = global_data.get('df')
+        if df is None or df.empty:
+            return jsonify({'success': False, 'error': 'No hay datos cargados'}), 400
+
+        # Asegurar modelos entrenados con datos reales
+        if not (ml_engine.is_trained and ml_engine.ml_mode):
+            ok = ml_engine.train_models_enhanced(df)
+            global_data['ml_models_trained'] = bool(ok)
+            if not ok:
+                return jsonify({'success': False, 'error': 'No se pudieron entrenar los modelos con los datos actuales'}), 400
+
+        equipos = ml_engine.load_real_equipment_codes()[:10] or []
+        if not equipos:
+            return jsonify({'success': False, 'error': 'No se encontraron códigos de equipos válidos'}), 400
+
+        payload = {}
+        for eq in equipos:
+            try:
+                pred = ml_engine.predict_equipment({'equipo': eq})
+            except Exception as e:
+                pred = {'error': str(e)}
+
+            if analysis_type.lower() == 'fr30':
+                # Mapear a bandas para facilitar visualización
+                risk = float(pred.get('fr30_risk', 0) or 0)
+                if risk >= 0.5:
+                    banda = '🔴 Alto'
+                elif risk >= 0.3:
+                    banda = '🟠 Medio'
+                else:
+                    banda = '🟢 Bajo'
+                payload[eq] = {
+                    'risk_30d': risk,
+                    'banda': banda,
+                    'source': 'ML_Real' if pred.get('mode') == 'ML_Real' else pred.get('mode', 'UNKNOWN')
+                }
+            elif analysis_type.lower() == 'rul':
+                payload[eq] = {
+                    'rul50_d': int(pred.get('rul_days', 0) or 0),
+                    'rul90_d': int(max(0, (pred.get('rul_days', 0) or 0) * 0.7)),
+                    'source': pred.get('mode', 'UNKNOWN')
+                }
+            elif analysis_type.lower() == 'anomaly':
+                payload[eq] = {
+                    'anomaly_score': float(pred.get('anomaly_score', 0) or 0),
+                    'source': pred.get('mode', 'UNKNOWN')
+                }
+            else:
+                return jsonify({'success': False, 'error': f'Tipo de análisis no soportado: {analysis_type}'}), 400
+
+        return jsonify({'success': True, 'data': payload, 'type': analysis_type.lower(), 'timestamp': datetime.now().isoformat()})
+    except Exception as e:
+        logger.exception(f"ml_specific error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # --------------------------------------
 # Estado/Healthcheck
 # --------------------------------------
@@ -780,13 +892,38 @@ def connection_test():
 
 @app.route('/api/status')
 def api_status():
-    return jsonify({
+    """Estado detallado del sistema con información de debug"""
+    df = global_data.get('df')
+    status = {
         'status': 'running',
-        'data_loaded': global_data['df'] is not None,
+        'data_loaded': df is not None,
         'last_processed': global_data['processed_date'].isoformat() if global_data['processed_date'] else None,
         'ml_available': bool(ml_engine.is_trained and ml_engine.ml_mode),
         'version': '3.1.0'
-    })
+    }
+    
+    if df is not None:
+        status.update({
+            'data_info': {
+                'total_rows': len(df),
+                'total_columns': len(df.columns),
+                'columns': list(df.columns),
+                'file_name': global_data.get('file_name'),
+                'sheet_used': global_data.get('stats', {}).get('sheet_used'),
+                'available_sheets': global_data.get('stats', {}).get('available_sheets', []),
+                'critical_columns': {
+                    'fecha_in': 'fecha_in' in df.columns,
+                    'tipo_atencion': 'tipo_atencion' in df.columns,
+                    'codigo': 'codigo' in df.columns
+                }
+            }
+        })
+        
+        # Sample data para debug
+        if len(df) > 0:
+            status['data_info']['sample_row'] = df.iloc[0].to_dict()
+    
+    return jsonify(status)
 
 # --------------------------------------
 # Rutas adicionales para compatibilidad con templates

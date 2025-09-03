@@ -357,8 +357,25 @@ function updateProgress(title, percentage, details) {
   document.getElementById('progress-details').textContent = details || '';
 }
 function hideProgress() {
-  const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
-  if (modal) modal.hide();
+  try {
+    const modalEl = document.getElementById('progressModal');
+    if (modalEl) {
+      // Usar getOrCreateInstance garantiza que recupere una instancia existente o cree una nueva
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.hide();
+    }
+  } catch (error) {
+    console.warn('Error cerrando modal de progreso:', error);
+    // Fallback: forzar ocultación manual
+    const backdrop = document.querySelector('.modal-backdrop');
+    if (backdrop) backdrop.remove();
+    const modalEl = document.getElementById('progressModal');
+    if (modalEl) {
+      modalEl.style.display = 'none';
+      modalEl.classList.remove('show');
+      document.body.classList.remove('modal-open');
+    }
+  }
 }
 function showError(message) {
   document.getElementById('error-details').textContent = message;
