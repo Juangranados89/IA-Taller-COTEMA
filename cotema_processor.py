@@ -517,11 +517,21 @@ def get_fr30_advanced_analysis(df, year=2025):
             correctivas_2025 = df_2025.copy()  # Asumir que todos son correctivos si no hay tipo
         
         if correctivas_2025.empty:
+            # Si no hay correctivas específicas, usar todos los datos como muestra
+            correctivas_2025 = df_2025.copy()
+            
+        if correctivas_2025.empty:
             return {
-                "error": f"No hay correctivas en {year}",
+                "error": f"No hay datos procesables en {year}",
                 "equipos_riesgo": [],
                 "meses_tendencia": [],
-                "factores_analisis": {}
+                "factores_analisis": {
+                    "total_equipos_analizados": 0,
+                    "total_correctivas_2025": 0,
+                    "promedio_mttr_horas": 0,
+                    "equipos_con_criticos": 0,
+                    "mes_mas_problematico": 1
+                }
             }
         
         # Calcular MTTR (si hay fechas de salida)
