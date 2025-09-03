@@ -700,8 +700,8 @@ def analyze_statistics():
         update_progress("Análisis completado", 2, 2, "Estadísticas generadas exitosamente")
         reset_progress()
         
-    response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
-    return Response(response_data, mimetype='application/json')
+        response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
+        return Response(response_data, mimetype='application/json')
     except Exception as e:
         logger.exception(f"analyze_statistics error: {e}")
         return jsonify({'success': False, 'error': str(e), 'debug': 'Error en el análisis'})
