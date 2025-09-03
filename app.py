@@ -7,6 +7,9 @@ import hashlib
 import logging
 import threading
 
+import pandas as pd
+import numpy as np
+
 # Dependencias base
 try:
     import pandas as pd
@@ -22,7 +25,25 @@ from cotema_processor import process_cotema_data, get_fr30_analysis
 # Configuración básica de Flask y logging
 # --------------------------------------
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+
+# Custom JSON encoder to handle numpy types
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int_, np.intc, np.intp, np.int8,
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float_, np.float16, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (datetime, pd.Timestamp)):
+            return obj.isoformat()
+        return super(CustomJSONEncoder, self).default(obj)
+
+app.json_encoder = CustomJSONEncoder
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-de-desarrollo')
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger("COTEMA")
