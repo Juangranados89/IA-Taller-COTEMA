@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, Response
 from datetime import datetime, timedelta
 import os
 from werkzeug.utils import secure_filename
@@ -700,7 +700,8 @@ def analyze_statistics():
         update_progress("Análisis completado", 2, 2, "Estadísticas generadas exitosamente")
         reset_progress()
         
-        return jsonify({'success': True, 'data': enhanced_data})
+    response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
+    return Response(response_data, mimetype='application/json')
     except Exception as e:
         logger.exception(f"analyze_statistics error: {e}")
         return jsonify({'success': False, 'error': str(e), 'debug': 'Error en el análisis'})
