@@ -19,7 +19,7 @@ except ImportError as e:
     np = None
 
 # Importar el procesador ENFOCADO en datos reales
-from cotema_processor import process_cotema_data, get_fr30_analysis
+from cotema_processor import process_cotema_data, get_fr30_analysis, get_fr30_advanced_analysis
 
 # --------------------------------------
 # Configuración básica de Flask y logging
@@ -705,6 +705,60 @@ def analyze_statistics():
     except Exception as e:
         logger.exception(f"analyze_statistics error: {e}")
         return jsonify({'success': False, 'error': str(e), 'debug': 'Error en el análisis'})
+
+@app.route('/analyze_statistics_advanced', methods=['POST'])
+def analyze_statistics_advanced():
+    """KPI FR-30 avanzado: equipos con mayor tendencia a fallar por mes (2025)."""
+    try:
+        df = global_data.get('df')
+        if df is None or df.empty:
+            response_data = json.dumps({
+                'success': True, 
+                'data': {
+                    'equipos_riesgo': [], 
+                    'meses_tendencia': [], 
+                    'factores_analisis': {},
+                    'debug': 'No hay datos cargados'
+                }
+            }, cls=CustomJSONEncoder)
+            return Response(response_data, mimetype='application/json')
+
+        # Obtener año del request (por defecto 2025)
+        year = 2025
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                request_data = request.get_json(silent=True) or {}
+                year = int(request_data.get('year', 2025))
+        except (TypeError, ValueError, Exception) as e:
+            logger.warning(f"Error obteniendo año del request: {e}")
+            year = 2025
+
+        update_progress("Analizando tendencias avanzadas", 1, 3, f"Procesando datos del {year}...")
+        
+        # Ejecutar análisis avanzado
+        advanced_analysis = get_fr30_advanced_analysis(df, year=year)
+        
+        update_progress("Calculando factores de riesgo", 2, 3, "MTTR, sistemas críticos, frecuencia...")
+        
+        # Agregar metadatos adicionales
+        enhanced_data = {
+            **advanced_analysis,
+            'analysis_type': 'FR-30 Advanced Predictive',
+            'total_registros_dataset': len(df),
+            'columnas_disponibles': list(df.columns),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        update_progress("Análisis avanzado completado", 3, 3, "Predicciones generadas exitosamente")
+        reset_progress()
+        
+        response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
+        return Response(response_data, mimetype='application/json')
+        
+    except Exception as e:
+        logger.exception(f"analyze_statistics_advanced error: {e}")
+        response_data = json.dumps({'success': False, 'error': str(e), 'debug': 'Error en el análisis avanzado'}, cls=CustomJSONEncoder)
+        return Response(response_data, mimetype='application/json')
 
 @app.route('/api/frequency-analysis')
 def frequency_analysis():

@@ -453,3 +453,169 @@ def get_fr30_analysis(df: pd.DataFrame, days: int = 30, codigo_column: str = "co
         "equipos_con_correctivas": int(top[codigo_column].nunique()),
         "top_equipos": top.to_dict("records"),
     }
+
+
+def get_fr30_advanced_analysis(df, year=2025):
+    """
+    Análisis FR-30 avanzado para identificar equipos con mayor tendencia a fallar
+    y predecir en qué mes es más probable que ocurra.
+    
+    Factores considerados:
+    - Cantidad de ingresos (frecuencia)
+    - Ingresos por sistemas críticos
+    - MTTR (Mean Time To Repair)
+    - E.TC. (Eficiencia de Tiempo de Ciclo)
+    
+    Returns:
+        dict: Análisis con datos listos para gráficos X(meses) Y(equipos por riesgo)
+    """
+    try:
+        # Detectar columnas automáticamente
+        codigo_column = None
+        for col in ["codigo", "Codigo", "CODIGO", "equipo", "Equipo"]:
+            if col in df.columns:
+                codigo_column = col
+                break
+        
+        if codigo_column is None:
+            return {
+                "error": "No se encontró columna de código de equipo",
+                "equipos_riesgo": [],
+                "meses_tendencia": [],
+                "factores_analisis": {}
+            }
+        
+        # Filtrar por año 2025
+        if "fecha_in" not in df.columns:
+            return {
+                "error": "No se encontró columna fecha_in",
+                "equipos_riesgo": [],
+                "meses_tendencia": [],
+                "factores_analisis": {}
+            }
+        
+        df_copy = df.copy()
+        df_copy["fecha_in"] = pd.to_datetime(df_copy["fecha_in"], errors="coerce")
+        df_2025 = df_copy[df_copy["fecha_in"].dt.year == year].copy()
+        
+        if df_2025.empty:
+            return {
+                "error": f"No hay datos para el año {year}",
+                "equipos_riesgo": [],
+                "meses_tendencia": [],
+                "factores_analisis": {}
+            }
+        
+        # Agregar columna de mes
+        df_2025["mes"] = df_2025["fecha_in"].dt.month
+        df_2025["mes_nombre"] = df_2025["fecha_in"].dt.strftime("%B")
+        
+        # Filtrar solo correctivas
+        if "tipo_atencion" in df_2025.columns:
+            correctivas_2025 = df_2025[df_2025["tipo_atencion"].str.upper() == "CORRECTIVA"].copy()
+        else:
+            correctivas_2025 = df_2025.copy()  # Asumir que todos son correctivos si no hay tipo
+        
+        if correctivas_2025.empty:
+            return {
+                "error": f"No hay correctivas en {year}",
+                "equipos_riesgo": [],
+                "meses_tendencia": [],
+                "factores_analisis": {}
+            }
+        
+        # Calcular MTTR (si hay fechas de salida)
+        mttr_data = {}
+        if "fecha_out" in correctivas_2025.columns:
+            correctivas_2025["fecha_out"] = pd.to_datetime(correctivas_2025["fecha_out"], errors="coerce")
+            correctivas_2025["tiempo_reparacion"] = (
+                correctivas_2025["fecha_out"] - correctivas_2025["fecha_in"]
+            ).dt.total_seconds() / 3600  # Horas
+            
+            mttr_por_equipo = correctivas_2025.groupby(codigo_column)["tiempo_reparacion"].mean()
+            mttr_data = mttr_por_equipo.to_dict()
+        
+        # Análisis por equipo
+        analisis_equipos = []
+        
+        for equipo in correctivas_2025[codigo_column].unique():
+            equipo_data = correctivas_2025[correctivas_2025[codigo_column] == equipo]
+            
+            # Factor 1: Cantidad de ingresos (frecuencia)
+            total_ingresos = len(equipo_data)
+            
+            # Factor 2: Sistemas críticos (si existe columna de criticidad)
+            ingresos_criticos = 0
+            if "criticidad" in equipo_data.columns or "sistema_critico" in equipo_data.columns:
+                critico_col = "criticidad" if "criticidad" in equipo_data.columns else "sistema_critico"
+                ingresos_criticos = equipo_data[critico_col].str.upper().isin(["CRITICO", "CRÍTICO", "HIGH", "ALTA"]).sum()
+            
+            # Factor 3: MTTR
+            mttr_equipo = mttr_data.get(equipo, 0)
+            
+            # Factor 4: E.TC. (Eficiencia de Tiempo de Ciclo) - basado en frecuencia vs tiempo
+            meses_activos = equipo_data["mes"].nunique()
+            etc_score = total_ingresos / max(meses_activos, 1)  # Ingresos por mes activo
+            
+            # Calcular score de riesgo combinado
+            score_frecuencia = min(total_ingresos / 10, 1.0) * 0.3  # Normalizado, peso 30%
+            score_criticos = min(ingresos_criticos / 5, 1.0) * 0.25  # Peso 25%
+            score_mttr = min(mttr_equipo / 168, 1.0) * 0.25  # Normalizado a semanas, peso 25%
+            score_etc = min(etc_score / 5, 1.0) * 0.2  # Peso 20%
+            
+            riesgo_total = score_frecuencia + score_criticos + score_mttr + score_etc
+            
+            # Análisis de tendencia mensual
+            tendencia_mensual = equipo_data.groupby("mes").size().to_dict()
+            mes_mayor_riesgo = max(tendencia_mensual.keys(), key=lambda x: tendencia_mensual[x]) if tendencia_mensual else 1
+            
+            analisis_equipos.append({
+                "equipo": equipo,
+                "riesgo_score": round(riesgo_total, 3),
+                "total_ingresos": int(total_ingresos),
+                "ingresos_criticos": int(ingresos_criticos),
+                "mttr_horas": round(mttr_equipo, 2),
+                "etc_score": round(etc_score, 2),
+                "mes_mayor_riesgo": int(mes_mayor_riesgo),
+                "tendencia_mensual": tendencia_mensual
+            })
+        
+        # Ordenar por riesgo descendente (mayor riesgo primero)
+        analisis_equipos.sort(key=lambda x: x["riesgo_score"], reverse=True)
+        
+        # Top 15 equipos con mayor riesgo
+        top_equipos_riesgo = analisis_equipos[:15]
+        
+        # Análisis de tendencia general por mes
+        tendencia_general = correctivas_2025.groupby("mes").agg({
+            codigo_column: "count",
+            "mes_nombre": "first"
+        }).reset_index()
+        
+        tendencia_general.columns = ["mes", "total_correctivas", "mes_nombre"]
+        meses_tendencia = tendencia_general.to_dict("records")
+        
+        # Factores de análisis resumen
+        factores_resumen = {
+            "total_equipos_analizados": len(analisis_equipos),
+            "total_correctivas_2025": len(correctivas_2025),
+            "promedio_mttr_horas": round(sum(mttr_data.values()) / len(mttr_data), 2) if mttr_data else 0,
+            "equipos_con_criticos": sum(1 for e in analisis_equipos if e["ingresos_criticos"] > 0),
+            "mes_mas_problematico": max(meses_tendencia, key=lambda x: x["total_correctivas"])["mes"] if meses_tendencia else 1
+        }
+        
+        return {
+            "year_analizado": year,
+            "equipos_riesgo": top_equipos_riesgo,
+            "meses_tendencia": meses_tendencia,
+            "factores_analisis": factores_resumen,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "error": f"Error en análisis avanzado: {str(e)}",
+            "equipos_riesgo": [],
+            "meses_tendencia": [],
+            "factores_analisis": {}
+        }
