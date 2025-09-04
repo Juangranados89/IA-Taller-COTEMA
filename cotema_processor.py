@@ -28,18 +28,17 @@ except ImportError:
     ADVANCED_ALGORITHMS_AVAILABLE = False
     print("Advanced algorithms not available - using fallback methods")
 
-# Funciones principales:
-# - process_cotema_data(df_raw): orquesta todo el flujo y devuelve (dataset, quality_report, catalogos)  
-# - get_fr30_analysis(df, days=30): resumen real de correctivas en la ventana indicada (por defecto 30 días)
-# - get_fr30_advanced_analysis(df, year=2025): análisis FR-30 con algoritmos ML y Weibull avanzados
-#
-# Notas de diseño:
-# - Mapeos por IGUALDAD EXACTA (no por substring) para evitar nombres duplicados.
-# - Se respeta 'codigo' como identificador principal; se expone alias 'equipo' para compatibilidad.
-# - No se generan códigos ni métricas simuladas. Si faltan datos, se reporta y/o se devuelve vacío/0.
 """
+Funciones principales:
+- process_cotema_data(df_raw): orquesta todo el flujo y devuelve (dataset, quality_report, catalogos)  
+- get_fr30_analysis(df, days=30): resumen real de correctivas en la ventana indicada (por defecto 30 días)
+- get_fr30_advanced_analysis(df, year=2025): análisis FR-30 con algoritmos ML y Weibull avanzados
 
-from __future__ import annotations
+Notas de diseño:
+- Mapeos por IGUALDAD EXACTA (no por substring) para evitar nombres duplicados.
+- Se respeta 'codigo' como identificador principal; se expone alias 'equipo' para compatibilidad.
+- No se generan códigos ni métricas simuladas. Si faltan datos, se reporta y/o se devuelve vacío/0.
+"""
 
 import logging
 import re
