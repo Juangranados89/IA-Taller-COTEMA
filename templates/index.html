@@ -474,18 +474,9 @@ function getDemoAnalysisData() {
       { equipo: 'CH-HR01', riesgo_score: 75.0, total_ingresos: 12, ingresos_criticos: 8, mttr_horas: 15.4, mes_mayor_riesgo: 2 }
     ],
     meses_tendencia: [
-      { mes: 1, mes_nombre: 'Enero', total_correctivas: 45 },
-      { mes: 2, mes_nombre: 'Febrero', total_correctivas: 38 },
-      { mes: 3, mes_nombre: 'Marzo', total_correctivas: 42 },
-      { mes: 4, mes_nombre: 'Abril', total_correctivas: 35 },
-      { mes: 5, mes_nombre: 'Mayo', total_correctivas: 50 },
-      { mes: 6, mes_nombre: 'Junio', total_correctivas: 40 },
-      { mes: 7, mes_nombre: 'Julio', total_correctivas: 32 },
-      { mes: 8, mes_nombre: 'Agosto', total_correctivas: 28 },
-      { mes: 9, mes_nombre: 'Septiembre', total_correctivas: 48 },
-      { mes: 10, mes_nombre: 'Octubre', total_correctivas: 44 },
-      { mes: 11, mes_nombre: 'Noviembre', total_correctivas: 39 },
-      { mes: 12, mes_nombre: 'Diciembre', total_correctivas: 25 }
+      { mes: 9, mes_nombre: 'Septiembre (Mes Actual)', total_correctivas: 48, es_prediccion: false, periodo: 'Mes Actual' },
+      { mes: 10, mes_nombre: 'Octubre (Próximo Mes)', total_correctivas: 52, es_prediccion: true, periodo: 'Próximo Mes' },
+      { mes: 11, mes_nombre: 'Noviembre (2 Meses)', total_correctivas: 46, es_prediccion: true, periodo: '2 Meses' }
     ],
     factores_analisis: {
       total_equipos_analizados: 15,
@@ -562,16 +553,25 @@ function displayAdvancedAnalysisResults(data) {
   
   let mesesHtml = '';
   if (meses.length > 0) {
-    mesesHtml = meses.map(m => `
-      <div class="col-md-3 mb-2">
-        <div class="card text-center">
-          <div class="card-body py-2">
-            <h6 class="card-title mb-1">Mes ${m.mes}</h6>
-            <span class="badge bg-primary">${m.total_correctivas}</span>
+    mesesHtml = meses.map((m, idx) => {
+      const badgeClass = m.es_prediccion ? 'bg-warning' : 'bg-success';
+      const icon = m.es_prediccion ? '🔮' : '📊';
+      const cardClass = m.es_prediccion ? 'border-warning' : 'border-success';
+      
+      return `
+        <div class="col-md-4 mb-3">
+          <div class="card ${cardClass} text-center">
+            <div class="card-body py-3">
+              <h6 class="card-title mb-2">${icon} ${m.mes_nombre}</h6>
+              <span class="badge ${badgeClass} fs-6 px-3 py-2">${m.total_correctivas}</span>
+              <div class="small mt-2 ${m.es_prediccion ? 'text-warning' : 'text-success'}">
+                ${m.es_prediccion ? 'Predicción IA' : 'Mes Actual'}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
   
   panel.innerHTML = `
@@ -801,7 +801,7 @@ function createAdvancedCharts(equipos, meses, factores) {
     console.warn('No equipos data available for chart');
   }
   
-  // 2. Gráfico de Tendencia Mensual (Eje X)
+  // 2. Gráfico de Tendencia Mensual (Eje X) - Mes Actual + 2 Siguientes
   if (meses && meses.length > 0) {
     console.log('Creating meses chart with:', meses);
     
@@ -813,16 +813,20 @@ function createAdvancedCharts(equipos, meses, factores) {
       data: {
         labels: mesesOrdenados.map(m => m.mes_nombre || `Mes ${m.mes || 'N/A'}`),
         datasets: [{
-          label: 'Incidencias por Mes',
+          label: 'Incidencias Actuales y Predichas',
           data: mesesOrdenados.map(m => parseInt(m.total_correctivas) || 0),
-          borderColor: '#007bff',
-          backgroundColor: 'rgba(0, 123, 255, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointBackgroundColor: '#007bff',
+          borderColor: mesesOrdenados.map(m => m.es_prediccion ? '#ff6b6b' : '#007bff'),
+          backgroundColor: mesesOrdenados.map(m => m.es_prediccion ? 'rgba(255, 107, 107, 0.1)' : 'rgba(0, 123, 255, 0.1)'),
+          pointBackgroundColor: mesesOrdenados.map(m => m.es_prediccion ? '#ff6b6b' : '#007bff'),
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
-          pointRadius: 5
+          pointRadius: mesesOrdenados.map(m => m.es_prediccion ? 8 : 5),
+          pointStyle: mesesOrdenados.map(m => m.es_prediccion ? 'triangle' : 'circle'),
+          segment: {
+            borderDash: ctx => ctx.p1.parsed.y !== ctx.p0.parsed.y && mesesOrdenados[ctx.p1DataIndex]?.es_prediccion ? [5, 5] : undefined
+          },
+          fill: false,
+          tension: 0.4
         }]
       },
       options: {
@@ -832,14 +836,31 @@ function createAdvancedCharts(equipos, meses, factores) {
           legend: { display: false },
           title: {
             display: true,
-            text: 'Distribución Temporal de Incidencias'
+            text: 'Análisis Predictivo: Mes Actual + Próximos 2 Meses'
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const mesData = mesesOrdenados[context.dataIndex];
+                const tipo = mesData.es_prediccion ? '🔮 PREDICCIÓN' : '📊 ACTUAL';
+                const valor = context.parsed.y;
+                return `${tipo}: ${valor} incidencias`;
+              },
+              afterLabel: function(context) {
+                const mesData = mesesOrdenados[context.dataIndex];
+                if (mesData.es_prediccion) {
+                  return '⚠️ Basado en tendencia histórica';
+                }
+                return '✅ Datos reales del período';
+              }
+            }
           }
         },
         scales: {
-          x: { title: { display: true, text: 'Meses del 2025' } },
+          x: { title: { display: true, text: 'Período de Análisis (3 Meses)' } },
           y: { 
             beginAtZero: true,
-            title: { display: true, text: 'Número de Incidencias' }
+            title: { display: true, text: 'Incidencias Correctivas Esperadas' }
           }
         }
       }

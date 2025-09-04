@@ -168,10 +168,15 @@ class AdvancedPredictionEngine:
             # Análisis de patrones históricos por mes
             patron_mensual = df_temporal[df_temporal['TIPO_MANTENIMIENTO'] == 'CORRECTIVO'].groupby('mes').size()
             
-            # Calcular tendencia y estacionalidad
+            # Calcular predicciones solo para mes actual y próximos 2 meses
+            from datetime import datetime
+            mes_actual = datetime.now().month
+            
             meses_prediccion = []
-            for mes in range(1, 13):
-                # Base histórica
+            for i in range(3):  # Mes actual + 2 siguientes
+                mes = ((mes_actual - 1 + i) % 12) + 1  # Ciclo de 1-12
+                
+                # Base histórica para este mes
                 base_historica = patron_mensual.get(mes, 0)
                 
                 # Factor de crecimiento (basado en tendencia de últimos años)
@@ -186,16 +191,23 @@ class AdvancedPredictionEngine:
                 factor_estacional = self._get_seasonal_factor(mes)
                 proyeccion_ajustada = proyeccion * factor_estacional
                 
+                # Determinar etiqueta según la posición
+                if i == 0:
+                    etiqueta = "Mes Actual"
+                elif i == 1:
+                    etiqueta = "Próximo Mes"
+                else:
+                    etiqueta = "2 Meses"
+                
                 meses_prediccion.append({
                     'mes': mes,
-                    'mes_nombre': self._get_month_name(mes),
+                    'mes_nombre': f"{self._get_month_name(mes)} ({etiqueta})",
                     'total_correctivas': max(int(proyeccion_ajustada), 1),
                     'confianza': min(base_historica / max(patron_mensual.max(), 1), 1.0),
-                    'factor_estacional': factor_estacional
+                    'factor_estacional': factor_estacional,
+                    'es_prediccion': i > 0,  # Marcar cuáles son predicciones futuras
+                    'periodo': etiqueta
                 })
-            
-            # Ordenar por mayor número de correctivas predichas
-            meses_prediccion.sort(key=lambda x: x['total_correctivas'], reverse=True)
             
             return meses_prediccion
             
