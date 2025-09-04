@@ -634,7 +634,7 @@ def _fallback_simple_analysis(df, year=2025):
             
             equipos_analysis.append({
                 "equipo": str(equipo),
-                "riesgo_score": round(riesgo_total, 3),
+                "riesgo_score": round(riesgo_total * 100, 1),  # Convertir a escala 0-100
                 "total_ingresos": int(total_ingresos),
                 "ingresos_criticos": 0,  # Simplificado
                 "mttr_horas": 0.0,  # Simplificado

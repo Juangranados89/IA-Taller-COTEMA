@@ -126,7 +126,7 @@ class AdvancedPredictionEngine:
                 
                 equipos_riesgo.append({
                     'equipo': equipo,
-                    'riesgo_score': round(risk_score + recent_boost, 3),
+                    'riesgo_score': round((risk_score + recent_boost) * 100, 1),  # Convertir a escala 0-100
                     'total_ingresos': int(features['total_ingresos']),
                     'ingresos_criticos': int(features['correctivos_count']),
                     'mttr_horas': round(features.get('tbf_promedio', 0) / 24, 1),
@@ -307,7 +307,7 @@ class AdvancedPredictionEngine:
                 
                 equipos_riesgo.append({
                     'equipo': equipo,
-                    'riesgo_score': round(riesgo_score, 3),
+                    'riesgo_score': round(riesgo_score * 100, 1),  # Convertir a escala 0-100
                     'total_ingresos': int(stats['total_ingresos']),
                     'ingresos_criticos': int(stats['correctivos']),
                     'mttr_horas': 0,

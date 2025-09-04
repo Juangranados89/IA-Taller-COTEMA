@@ -172,7 +172,7 @@ class WeibullSurvivalAnalysis:
                 
                 risk_ranking.append({
                     'equipo': equipo,
-                    'riesgo_weibull': round(min(risk_score * 2, 1.0), 3),  # Normalizar a 0-1
+                    'riesgo_weibull': round(min(risk_score * 2, 1.0) * 100, 1),  # Convertir a escala 0-100
                     'prob_falla_30d': prediction['probabilidad_falla_30d'],
                     'mtbf_dias': prediction['mtbf_dias'],
                     'confiabilidad': prediction['confiabilidad_actual'],
@@ -249,12 +249,12 @@ def integrate_weibull_analysis(df, existing_analysis):
             weibull_data = next((w for w in weibull_ranking if w['equipo'] == equipo_nombre), None)
             
             if weibull_data:
-                # Combinar scores: 60% ML + 40% Weibull
+                # Combinar scores: 60% ML + 40% Weibull (ambos ya en escala 0-100)
                 score_ml = equipo_existente.get('riesgo_score', 0)
                 score_weibull = weibull_data['riesgo_weibull']
                 score_combinado = 0.6 * score_ml + 0.4 * score_weibull
                 
-                equipo_existente['riesgo_score'] = round(score_combinado, 3)
+                equipo_existente['riesgo_score'] = round(score_combinado, 1)
                 equipo_existente['mtbf_dias'] = weibull_data['mtbf_dias']
                 equipo_existente['prob_falla_30d'] = weibull_data['prob_falla_30d']
                 equipo_existente['algoritmo'] = 'ML + Weibull Hybrid'
