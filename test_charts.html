@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Charts</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container { 
+            position: relative; 
+            height: 400px; 
+            width: 80%; 
+            margin: 20px auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Charts</h1>
+    <div class="chart-container">
+        <h3>Test Equipment Chart</h3>
+        <canvas id="testEquiposChart"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <h3>Test Monthly Trend Chart</h3>
+        <canvas id="testMesesChart"></canvas>
+    </div>
+
+    <script>
+        // Datos de prueba basados en los datos reales que vimos en la imagen
+        const testEquipos = [
+            { equipo: 'VD-TC27', riesgo_score: 0.925 },
+            { equipo: 'VD-C084', riesgo_score: 0.9 },
+            { equipo: 'VD-TC04', riesgo_score: 0.9 },
+            { equipo: 'VD-C033', riesgo_score: 0.9 },
+            { equipo: 'VD-C048', riesgo_score: 0.9 }
+        ];
+
+        const testMeses = [
+            { mes: 1, total_correctivas: 45 },
+            { mes: 2, total_correctivas: 38 },
+            { mes: 3, total_correctivas: 42 },
+            { mes: 4, total_correctivas: 35 },
+            { mes: 5, total_correctivas: 50 },
+            { mes: 6, total_correctivas: 40 },
+            { mes: 7, total_correctivas: 48 },
+            { mes: 8, total_correctivas: 44 }
+        ];
+
+        // Crear gráfico de equipos
+        const ctxEquipos = document.getElementById('testEquiposChart').getContext('2d');
+        new Chart(ctxEquipos, {
+            type: 'bar',
+            data: {
+                labels: testEquipos.map(eq => eq.equipo),
+                datasets: [{
+                    label: 'Score de Riesgo',
+                    data: testEquipos.map(eq => eq.riesgo_score),
+                    backgroundColor: testEquipos.map((eq, idx) => {
+                        if (idx < 2) return '#dc3545'; // Rojo para top 2
+                        if (idx < 4) return '#fd7e14'; // Naranja para 3-4
+                        return '#ffc107'; // Amarillo para resto
+                    }),
+                    borderColor: '#495057',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Equipos por Riesgo (Test)'
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 1.0,
+                        title: { display: true, text: 'Score de Riesgo' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Equipos' }
+                    }
+                }
+            }
+        });
+
+        // Crear gráfico de meses
+        const ctxMeses = document.getElementById('testMesesChart').getContext('2d');
+        new Chart(ctxMeses, {
+            type: 'line',
+            data: {
+                labels: testMeses.map(m => `Mes ${m.mes}`),
+                datasets: [{
+                    label: 'Incidencias por Mes',
+                    data: testMeses.map(m => m.total_correctivas),
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#007bff',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Tendencia Mensual (Test)'
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Meses' } },
+                    y: { 
+                        beginAtZero: true,
+                        title: { display: true, text: 'Incidencias' }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

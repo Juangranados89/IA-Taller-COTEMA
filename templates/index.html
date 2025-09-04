@@ -14,7 +14,100 @@
   .grad-danger  { background: linear-gradient(135deg, #dc3545, #fd7e14); color: #fff; }
   .step-number  { width: 40px; height: 40px; }
   .upload-zone  { border: 2px dashed #ced4da; border-radius: .5rem; padding: 1.5rem; }
-  .chart-container { position: relative; height: 300px; }
+  .chart-container { position: relative; height: 400px; }
+  .pro-card { 
+    background: linear-gradient(145deg, #ffffff, #f8f9fa); 
+    border: none; 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-radius: 15px;
+    transition: transform 0.3s ease;
+  }
+  .pro-card:hover { transform: translateY(-5px); }
+  .metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px;
+    padding: 25px;
+    text-align: center;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+  }
+  .risk-high { background: linear-gradient(135deg, #ff416c, #ff4757) !important; }
+  .risk-medium { background: linear-gradient(135deg, #f9ca24, #f0932b) !important; }
+  .risk-low { background: linear-gradient(135deg, #6c5ce7, #a29bfe) !important; }
+  .chart-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  
+  /* Executive Metric Cards */
+  .executive-metric-card {
+    border-radius: 20px;
+    padding: 0;
+    margin-bottom: 20px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+  
+  .executive-metric-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+  }
+  
+  .metric-content {
+    padding: 30px 20px;
+    text-align: center;
+    color: white;
+    position: relative;
+  }
+  
+  .metric-icon {
+    font-size: 3rem;
+    opacity: 0.3;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+  }
+  
+  .metric-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  
+  .metric-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  /* Professional Analysis Header */
+  .analysis-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 25px;
+    color: white;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  }
+  
+  .analysis-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+  
+  .analysis-subtitle {
+    font-size: 0.95rem;
+    opacity: 0.9;
+  }
 </style>
 
 <div class="container-fluid px-4 py-3">
@@ -418,57 +511,80 @@ function displayAdvancedAnalysisResults(data) {
   }
   
   panel.innerHTML = `
-    <div class="alert alert-success">
-      <h6><i class="fas fa-brain me-2"></i>Análisis FR-30 Avanzado Completado (${data.year_analizado})</h6>
-      <small>Equipos con mayor tendencia a fallar y predicción mensual</small>
+    <div class="analysis-header">
+      <div class="analysis-title">
+        <i class="fas fa-brain me-2"></i>Análisis FR-30 Avanzado Completado (${data.year_analizado})
+      </div>
+      <div class="analysis-subtitle">
+        Equipos con mayor tendencia a fallar y predicción mensual - Dashboard Ejecutivo
+      </div>
     </div>
     
     <div class="row mb-4">
       <div class="col-md-3">
-        <div class="card text-center border-primary">
-          <div class="card-body">
-            <h5 class="text-primary">${factores.total_equipos_analizados || 0}</h5>
-            <small>Equipos Analizados</small>
+        <div class="executive-metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <div class="metric-content">
+            <div class="metric-icon">
+              <i class="fas fa-cogs"></i>
+            </div>
+            <div class="metric-value">${factores.total_equipos_analizados || 0}</div>
+            <div class="metric-label">Equipos Analizados</div>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-center border-warning">
-          <div class="card-body">
-            <h5 class="text-warning">${factores.total_correctivas_2025 || 0}</h5>
-            <small>Correctivas 2025</small>
+        <div class="executive-metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+          <div class="metric-content">
+            <div class="metric-icon">
+              <i class="fas fa-tools"></i>
+            </div>
+            <div class="metric-value">${factores.total_correctivas_2025 || 0}</div>
+            <div class="metric-label">Correctivas 2025</div>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-center border-info">
-          <div class="card-body">
-            <h5 class="text-info">${factores.promedio_mttr_horas || 0}h</h5>
-            <small>MTTR Promedio</small>
+        <div class="executive-metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+          <div class="metric-content">
+            <div class="metric-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="metric-value">${factores.promedio_mttr_horas || 0}h</div>
+            <div class="metric-label">MTTR Promedio</div>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-center border-danger">
-          <div class="card-body">
-            <h5 class="text-danger">Mes ${factores.mes_mas_problematico || 'N/A'}</h5>
-            <small>Más Problemático</small>
+        <div class="executive-metric-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+          <div class="metric-content">
+            <div class="metric-icon">
+              <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="metric-value">Mes ${factores.mes_mas_problematico || 'N/A'}</div>
+            <div class="metric-label">Más Problemático</div>
           </div>
         </div>
       </div>
     </div>
     
-    <div class="row">
+    <div class="row mb-4">
       <div class="col-md-12">
-        <h5><i class="fas fa-chart-bar text-primary me-2"></i>Distribución de Riesgo por Equipos y Meses</h5>
-        <p class="text-muted small mb-3">Eje Y: Equipos ordenados por mayor riesgo | Eje X: Distribución mensual de incidencias</p>
+        <div class="text-center" style="padding: 20px;">
+          <h4 style="color: #2c3e50; font-weight: 700; margin-bottom: 10px;">
+            <i class="fas fa-chart-line text-primary me-2"></i>Dashboard Analítico Ejecutivo
+          </h4>
+          <p style="color: #7f8c8d; font-size: 1rem; margin: 0;">
+            <strong>Eje Y:</strong> Equipos ordenados por mayor riesgo | 
+            <strong>Eje X:</strong> Distribución mensual de incidencias
+          </p>
+        </div>
       </div>
     </div>
     
     <div class="row mb-4">
       <div class="col-md-6">
-        <div class="card">
-          <div class="card-header bg-danger text-white">
+        <div class="pro-card">
+          <div class="card-header text-white" style="background: linear-gradient(135deg, #ff416c, #ff4757); border: none; border-radius: 15px 15px 0 0;">
             <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Top 10 Equipos Mayor Riesgo (Eje Y)</h6>
           </div>
           <div class="card-body">
@@ -479,8 +595,8 @@ function displayAdvancedAnalysisResults(data) {
         </div>
       </div>
       <div class="col-md-6">
-        <div class="card">
-          <div class="card-header bg-primary text-white">
+        <div class="pro-card">
+          <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 15px 15px 0 0;">
             <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Tendencia Mensual 2025 (Eje X)</h6>
           </div>
           <div class="card-body">
@@ -535,149 +651,124 @@ function displayAdvancedAnalysisResults(data) {
 }
 
 function createAdvancedCharts(equipos, meses, factores) {
+  console.log('Creating charts with data:', { equipos, meses, factores });
+  
   // Destruir gráficos anteriores si existen
-  const chartIds = ['equiposRiesgoChart', 'tendenciaMensualChart', 'matrizRiesgoChart'];
+  const chartIds = ['equiposRiesgoChart', 'tendenciaMensualChart'];
   chartIds.forEach(id => {
     const existingChart = Chart.getChart(id);
-    if (existingChart) existingChart.destroy();
+    if (existingChart) {
+      console.log(`Destroying existing chart: ${id}`);
+      existingChart.destroy();
+    }
   });
+  
+  // Verificar que los canvas existan
+  const equiposCanvas = document.getElementById('equiposRiesgoChart');
+  const mesesCanvas = document.getElementById('tendenciaMensualChart');
+  
+  if (!equiposCanvas || !mesesCanvas) {
+    console.error('Canvas elements not found!');
+    return;
+  }
   
   // 1. Gráfico de Equipos con Mayor Riesgo (Eje Y)
-  const topEquipos = equipos.slice(0, 10);
-  const ctxEquipos = document.getElementById('equiposRiesgoChart').getContext('2d');
-  new Chart(ctxEquipos, {
-    type: 'bar',
-    data: {
-      labels: topEquipos.map(eq => eq.equipo),
-      datasets: [{
-        label: 'Score de Riesgo',
-        data: topEquipos.map(eq => eq.riesgo_score),
-        backgroundColor: topEquipos.map((eq, idx) => {
-          if (idx < 3) return '#dc3545'; // Rojo para top 3
-          if (idx < 6) return '#fd7e14'; // Naranja para 4-6
-          return '#ffc107'; // Amarillo para resto
-        }),
-        borderColor: '#495057',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      indexAxis: 'y', // Esto hace el gráfico horizontal
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Equipos Ordenados por Riesgo (Mayor a Menor)'
-        }
+  if (equipos && equipos.length > 0) {
+    const topEquipos = equipos.slice(0, 10);
+    console.log('Creating equipos chart with:', topEquipos);
+    
+    const ctxEquipos = equiposCanvas.getContext('2d');
+    new Chart(ctxEquipos, {
+      type: 'bar',
+      data: {
+        labels: topEquipos.map(eq => eq.equipo || 'N/A'),
+        datasets: [{
+          label: 'Score de Riesgo',
+          data: topEquipos.map(eq => parseFloat(eq.riesgo_score) || 0),
+          backgroundColor: topEquipos.map((eq, idx) => {
+            if (idx < 3) return '#dc3545'; // Rojo para top 3
+            if (idx < 6) return '#fd7e14'; // Naranja para 4-6
+            return '#ffc107'; // Amarillo para resto
+          }),
+          borderColor: '#495057',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
-          beginAtZero: true,
-          max: 1.0,
-          title: { display: true, text: 'Score de Riesgo (0.0 - 1.0)' }
+      options: {
+        indexAxis: 'y', // Esto hace el gráfico horizontal
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: 'Equipos Ordenados por Riesgo (Mayor a Menor)'
+          }
         },
-        y: {
-          title: { display: true, text: 'Equipos' }
-        }
-      }
-    }
-  });
-  
-  // 2. Gráfico de Tendencia Mensual (Eje X)
-  const ctxMeses = document.getElementById('tendenciaMensualChart').getContext('2d');
-  const mesesOrdenados = meses.sort((a, b) => a.mes - b.mes);
-  new Chart(ctxMeses, {
-    type: 'line',
-    data: {
-      labels: mesesOrdenados.map(m => m.mes_nombre || `Mes ${m.mes}`),
-      datasets: [{
-        label: 'Incidencias por Mes',
-        data: mesesOrdenados.map(m => m.total_correctivas),
-        borderColor: '#007bff',
-        backgroundColor: 'rgba(0, 123, 255, 0.1)',
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: '#007bff',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        pointRadius: 5
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Distribución Temporal de Incidencias'
-        }
-      },
-      scales: {
-        x: { title: { display: true, text: 'Meses del 2025' } },
-        y: { 
-          beginAtZero: true,
-          title: { display: true, text: 'Número de Incidencias' }
-        }
-      }
-    }
-  });
-  
-  // 3. Matriz de Riesgo (Scatter Plot)
-  const ctxMatriz = document.getElementById('matrizRiesgoChart').getContext('2d');
-  new Chart(ctxMatriz, {
-    type: 'scatter',
-    data: {
-      datasets: [{
-        label: 'Equipos por Frecuencia vs Riesgo',
-        data: topEquipos.map(eq => ({
-          x: eq.total_ingresos,
-          y: eq.riesgo_score,
-          label: eq.equipo
-        })),
-        backgroundColor: topEquipos.map((eq, idx) => {
-          if (eq.riesgo_score > 0.5) return '#dc3545'; // Alto riesgo
-          if (eq.riesgo_score > 0.3) return '#fd7e14'; // Medio riesgo
-          return '#28a745'; // Bajo riesgo
-        }),
-        borderColor: '#495057',
-        borderWidth: 1,
-        pointRadius: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Matriz: Frecuencia vs Riesgo'
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              const point = context.raw;
-              return `${point.label}: ${context.parsed.x} ingresos, Score: ${context.parsed.y.toFixed(3)}`;
-            }
+        scales: {
+          x: {
+            beginAtZero: true,
+            max: 1.0,
+            title: { display: true, text: 'Score de Riesgo (0.0 - 1.0)' }
+          },
+          y: {
+            title: { display: true, text: 'Equipos' }
           }
         }
+      }
+    });
+  } else {
+    console.warn('No equipos data available for chart');
+  }
+  
+  // 2. Gráfico de Tendencia Mensual (Eje X)
+  if (meses && meses.length > 0) {
+    console.log('Creating meses chart with:', meses);
+    
+    const ctxMeses = mesesCanvas.getContext('2d');
+    const mesesOrdenados = meses.sort((a, b) => (a.mes || 0) - (b.mes || 0));
+    
+    new Chart(ctxMeses, {
+      type: 'line',
+      data: {
+        labels: mesesOrdenados.map(m => m.mes_nombre || `Mes ${m.mes || 'N/A'}`),
+        datasets: [{
+          label: 'Incidencias por Mes',
+          data: mesesOrdenados.map(m => parseInt(m.total_correctivas) || 0),
+          borderColor: '#007bff',
+          backgroundColor: 'rgba(0, 123, 255, 0.1)',
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: '#007bff',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5
+        }]
       },
-      scales: {
-        x: { 
-          beginAtZero: true,
-          title: { display: true, text: 'Frecuencia de Ingresos' }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: 'Distribución Temporal de Incidencias'
+          }
         },
-        y: { 
-          beginAtZero: true,
-          max: 1.0,
-          title: { display: true, text: 'Score de Riesgo' }
+        scales: {
+          x: { title: { display: true, text: 'Meses del 2025' } },
+          y: { 
+            beginAtZero: true,
+            title: { display: true, text: 'Número de Incidencias' }
+          }
         }
       }
-    }
-  });
+    });
+  } else {
+    console.warn('No meses data available for chart');
+  }
+  
+  console.log('Charts creation completed!');
 }
 
 function displayAnalysisResults(data, type) {
