@@ -2,6 +2,11 @@
 
 {% block title %}COTEMA - Análisis Predictivo{% endblock %}
 
+{% block head %}
+<!-- Chart.js para gráficos avanzados -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
 {% block content %}
 <!-- Estilos mínimos para reemplazar los style dinámicos -->
 <style>
@@ -9,6 +14,7 @@
   .grad-danger  { background: linear-gradient(135deg, #dc3545, #fd7e14); color: #fff; }
   .step-number  { width: 40px; height: 40px; }
   .upload-zone  { border: 2px dashed #ced4da; border-radius: .5rem; padding: 1.5rem; }
+  .chart-container { position: relative; height: 300px; }
 </style>
 
 <div class="container-fluid px-4 py-3">
@@ -453,8 +459,42 @@ function displayAdvancedAnalysisResults(data) {
     </div>
     
     <div class="row">
+      <div class="col-md-12">
+        <h5><i class="fas fa-chart-bar text-primary me-2"></i>Distribución de Riesgo por Equipos y Meses</h5>
+        <p class="text-muted small mb-3">Eje Y: Equipos ordenados por mayor riesgo | Eje X: Distribución mensual de incidencias</p>
+      </div>
+    </div>
+    
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header bg-danger text-white">
+            <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Top 10 Equipos Mayor Riesgo (Eje Y)</h6>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="equiposRiesgoChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Tendencia Mensual 2025 (Eje X)</h6>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="tendenciaMensualChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row">
       <div class="col-md-8">
-        <h6><i class="fas fa-exclamation-triangle text-danger me-2"></i>Top Equipos Mayor Riesgo (Eje Y)</h6>
+        <h6><i class="fas fa-table text-info me-2"></i>Detalle por Equipos</h6>
         <div class="table-responsive">
           <table class="table table-sm">
             <thead class="table-dark">
@@ -473,16 +513,171 @@ function displayAdvancedAnalysisResults(data) {
         </div>
       </div>
       <div class="col-md-4">
-        <h6><i class="fas fa-calendar text-primary me-2"></i>Tendencia Mensual (Eje X)</h6>
-        <div class="row">${mesesHtml}</div>
+        <h6><i class="fas fa-info-circle text-success me-2"></i>Matriz de Riesgo</h6>
+        <div class="card bg-light">
+          <div class="card-body">
+            <canvas id="matrizRiesgoChart" width="300" height="250"></canvas>
+          </div>
+        </div>
       </div>
     </div>
     
     <div class="mt-3">
       <small class="text-muted">
-        <strong>Factores considerados:</strong> Frecuencia de ingresos (30%), Sistemas críticos (25%), MTTR (25%), Eficiencia tiempo ciclo (20%)
+        <strong>Factores considerados:</strong> Frecuencia de ingresos (70%), Eficiencia tiempo ciclo (30%)
       </small>
     </div>`;
+  
+  // Crear gráficos con Chart.js
+  setTimeout(() => {
+    createAdvancedCharts(equipos, meses, factores);
+  }, 100);
+}
+
+function createAdvancedCharts(equipos, meses, factores) {
+  // Destruir gráficos anteriores si existen
+  const chartIds = ['equiposRiesgoChart', 'tendenciaMensualChart', 'matrizRiesgoChart'];
+  chartIds.forEach(id => {
+    const existingChart = Chart.getChart(id);
+    if (existingChart) existingChart.destroy();
+  });
+  
+  // 1. Gráfico de Equipos con Mayor Riesgo (Eje Y)
+  const topEquipos = equipos.slice(0, 10);
+  const ctxEquipos = document.getElementById('equiposRiesgoChart').getContext('2d');
+  new Chart(ctxEquipos, {
+    type: 'bar',
+    data: {
+      labels: topEquipos.map(eq => eq.equipo),
+      datasets: [{
+        label: 'Score de Riesgo',
+        data: topEquipos.map(eq => eq.riesgo_score),
+        backgroundColor: topEquipos.map((eq, idx) => {
+          if (idx < 3) return '#dc3545'; // Rojo para top 3
+          if (idx < 6) return '#fd7e14'; // Naranja para 4-6
+          return '#ffc107'; // Amarillo para resto
+        }),
+        borderColor: '#495057',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: 'y', // Esto hace el gráfico horizontal
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: 'Equipos Ordenados por Riesgo (Mayor a Menor)'
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          max: 1.0,
+          title: { display: true, text: 'Score de Riesgo (0.0 - 1.0)' }
+        },
+        y: {
+          title: { display: true, text: 'Equipos' }
+        }
+      }
+    }
+  });
+  
+  // 2. Gráfico de Tendencia Mensual (Eje X)
+  const ctxMeses = document.getElementById('tendenciaMensualChart').getContext('2d');
+  const mesesOrdenados = meses.sort((a, b) => a.mes - b.mes);
+  new Chart(ctxMeses, {
+    type: 'line',
+    data: {
+      labels: mesesOrdenados.map(m => m.mes_nombre || `Mes ${m.mes}`),
+      datasets: [{
+        label: 'Incidencias por Mes',
+        data: mesesOrdenados.map(m => m.total_correctivas),
+        borderColor: '#007bff',
+        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#007bff',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: 'Distribución Temporal de Incidencias'
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Meses del 2025' } },
+        y: { 
+          beginAtZero: true,
+          title: { display: true, text: 'Número de Incidencias' }
+        }
+      }
+    }
+  });
+  
+  // 3. Matriz de Riesgo (Scatter Plot)
+  const ctxMatriz = document.getElementById('matrizRiesgoChart').getContext('2d');
+  new Chart(ctxMatriz, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Equipos por Frecuencia vs Riesgo',
+        data: topEquipos.map(eq => ({
+          x: eq.total_ingresos,
+          y: eq.riesgo_score,
+          label: eq.equipo
+        })),
+        backgroundColor: topEquipos.map((eq, idx) => {
+          if (eq.riesgo_score > 0.5) return '#dc3545'; // Alto riesgo
+          if (eq.riesgo_score > 0.3) return '#fd7e14'; // Medio riesgo
+          return '#28a745'; // Bajo riesgo
+        }),
+        borderColor: '#495057',
+        borderWidth: 1,
+        pointRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: 'Matriz: Frecuencia vs Riesgo'
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const point = context.raw;
+              return `${point.label}: ${context.parsed.x} ingresos, Score: ${context.parsed.y.toFixed(3)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { 
+          beginAtZero: true,
+          title: { display: true, text: 'Frecuencia de Ingresos' }
+        },
+        y: { 
+          beginAtZero: true,
+          max: 1.0,
+          title: { display: true, text: 'Score de Riesgo' }
+        }
+      }
+    }
+  });
 }
 
 function displayAnalysisResults(data, type) {

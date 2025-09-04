@@ -740,20 +740,27 @@ def analyze_statistics_advanced():
         
         update_progress("Calculando factores de riesgo", 2, 3, "MTTR, sistemas críticos, frecuencia...")
         
-        # Agregar metadatos adicionales
+        # Agregar metadatos adicionales y timestamp para evitar caché
         enhanced_data = {
             **advanced_analysis,
             'analysis_type': 'FR-30 Advanced Predictive',
             'total_registros_dataset': len(df),
             'columnas_disponibles': list(df.columns),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'cache_buster': datetime.now().timestamp(),  # Evita caché de datos
+            'data_hash': str(hash(str(df.shape) + str(df.columns.tolist())))  # Hash de los datos
         }
         
         update_progress("Análisis avanzado completado", 3, 3, "Predicciones generadas exitosamente")
         reset_progress()
         
         response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
-        return Response(response_data, mimetype='application/json')
+        response = Response(response_data, mimetype='application/json')
+        # Headers anti-caché
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
         
     except Exception as e:
         logger.exception(f"analyze_statistics_advanced error: {e}")
