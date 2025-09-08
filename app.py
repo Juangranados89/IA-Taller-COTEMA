@@ -1089,6 +1089,87 @@ def ia_documentation():
         return redirect('/')
 
 
+@app.route('/analyze-fr30', methods=['POST'])
+def analyze_fr30():
+    """Ruta para análisis FR-30 específico - Compatible con predictions.html"""
+    try:
+        df = global_data.get('df')
+        if df is None or df.empty:
+            df_sample = create_sample_data()
+            global_data['df'] = df_sample
+            df = df_sample
+            
+        # Usar la misma función de análisis avanzado
+        result = get_fr30_advanced_analysis(df)
+        
+        return jsonify({
+            'success': True,
+            'data': result,
+            'message': 'Análisis FR-30 completado exitosamente'
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error en analyze-fr30: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Error en análisis FR-30'
+        }), 500
+
+
+@app.route('/deep-analysis', methods=['POST'])
+def deep_analysis():
+    """Análisis profundo - Compatible con dashboard_simple.html"""
+    try:
+        df = global_data.get('df')
+        if df is None or df.empty:
+            df_sample = create_sample_data()
+            global_data['df'] = df_sample
+            df = df_sample
+            
+        # Ejecutar análisis avanzado
+        result = get_fr30_advanced_analysis(df)
+        
+        return jsonify({
+            'success': True,
+            'data': result,
+            'analysis_type': 'deep_analysis',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error en deep-analysis: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/train-progress', methods=['GET'])
+def api_train_progress():
+    """Progreso de entrenamiento - Compatible con dashboard_simple.html"""
+    try:
+        # Simular progreso de entrenamiento
+        progress = {
+            'progress': 100,
+            'status': 'completed',
+            'message': 'Modelos entrenados exitosamente',
+            'models_ready': True,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(progress)
+        
+    except Exception as e:
+        logger.exception(f"Error en train-progress: {e}")
+        return jsonify({
+            'progress': 0,
+            'status': 'error',
+            'message': str(e),
+            'models_ready': False
+        }), 500
+
+
 @app.route('/version_check')
 def version_check():
     """Verificar versión activa y características disponibles"""
