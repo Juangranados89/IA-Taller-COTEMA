@@ -653,72 +653,195 @@ function displayAdvancedAnalysisResults(data) {
     </div>
     
     <div class="row mb-4">
-      <div class="col-md-6">
-        <div class="pro-card">
-          <div class="card-header text-white" style="background: linear-gradient(135deg, #ff416c, #ff4757); border: none; border-radius: 15px 15px 0 0;">
-            <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Top 10 Equipos Mayor Riesgo (Eje Y)</h6>
-          </div>
-          <div class="card-body">
-            <div class="chart-container">
-              <canvas id="equiposRiesgoChart"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6">
+      <!-- Panel de Conexión API para Power BI -->
+      <div class="col-md-12">
         <div class="pro-card">
           <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 15px 15px 0 0;">
-            <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Tendencia Mensual 2025 (Eje X)</h6>
+            <h6 class="mb-0"><i class="fas fa-database me-2"></i>Conexión API para Power BI / Herramientas de BI</h6>
           </div>
           <div class="card-body">
-            <div class="chart-container">
-              <canvas id="tendenciaMensualChart"></canvas>
+            <div class="row">
+              
+              <!-- Endpoint Principal -->
+              <div class="col-md-6 mb-3">
+                <div class="alert alert-info mb-2">
+                  <h6><i class="fas fa-link me-2"></i>Endpoint Principal - KPI FR-30</h6>
+                  <div class="bg-light p-2 rounded mb-2">
+                    <code>GET https://ia-tallercotema.onrender.com/api/kpi/fr30</code>
+                  </div>
+                  <small class="text-muted">Retorna equipos críticos con riesgo 0-100% y proyección mensual</small>
+                  <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyToClipboard('https://ia-tallercotema.onrender.com/api/kpi/fr30')">
+                    <i class="fas fa-copy me-1"></i>Copiar URL
+                  </button>
+                </div>
+              </div>
+
+              <!-- Endpoint de Verificación -->
+              <div class="col-md-6 mb-3">
+                <div class="alert alert-success mb-2">
+                  <h6><i class="fas fa-check-circle me-2"></i>Endpoint de Verificación</h6>
+                  <div class="bg-light p-2 rounded mb-2">
+                    <code>GET https://ia-tallercotema.onrender.com/version_check</code>
+                  </div>
+                  <small class="text-muted">Confirma que la API esté activa y funcionando</small>
+                  <button class="btn btn-sm btn-outline-success mt-2" onclick="copyToClipboard('https://ia-tallercotema.onrender.com/version_check')">
+                    <i class="fas fa-copy me-1"></i>Copiar URL
+                  </button>
+                </div>
+              </div>
+
+              <!-- Ejemplo de Respuesta JSON -->
+              <div class="col-md-12 mb-3">
+                <h6><i class="fas fa-code me-2"></i>Ejemplo de Estructura JSON Retornada:</h6>
+                <div class="bg-dark text-light p-3 rounded small">
+<pre style="color: #a0aec0; margin: 0; font-size: 0.8em;">{
+  "kpi_metadata": {
+    "kpi_name": "FR-30 Equipment Failure Risk",
+    "timestamp_utc": "2025-09-08T20:45:23Z",
+    "confidence_level": 85.0,
+    "analysis_period": "Current Month + Next Month"
+  },
+  "critical_equipment": [
+    {
+      "rank": 1,
+      "equipment_id": "EQ-001",
+      "risk_score_percent": 87.5,
+      "risk_category": "CRÍTICO",
+      "total_interventions": 12,
+      "critical_interventions": 8,
+      "mttr_hours": 32.0
+    }
+  ],
+  "monthly_forecast": [
+    {
+      "period": "Septiembre 2025 (Actual)",
+      "projected_corrective_maintenance": 5
+    },
+    {
+      "period": "Octubre 2025 (Siguiente)", 
+      "projected_corrective_maintenance": 3
+    }
+  ]
+}</pre>
+                </div>
+              </div>
+
+              <!-- Instrucciones para Power BI -->
+              <div class="col-md-12">
+                <div class="alert alert-warning">
+                  <h6><i class="fas fa-lightbulb me-2"></i>Instrucciones para Conexión en Power BI:</h6>
+                  <ol class="mb-0 small">
+                    <li><strong>Abrir Power BI</strong> → <code>Obtener datos</code> → <code>Web</code></li>
+                    <li><strong>URL:</strong> <code>https://ia-tallercotema.onrender.com/api/kpi/fr30</code></li>
+                    <li><strong>Método:</strong> GET (sin autenticación requerida)</li>
+                    <li><strong>Actualización:</strong> Configurar refresh automático cada 15-30 minutos</li>
+                    <li><strong>Campos principales:</strong> 
+                      <span class="badge bg-secondary me-1">equipment_id</span>
+                      <span class="badge bg-secondary me-1">risk_score_percent</span>
+                      <span class="badge bg-secondary me-1">period</span>
+                      <span class="badge bg-secondary">projected_corrective_maintenance</span>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
       </div>
     </div>
     
+    
+    <!-- Información adicional para desarrolladores -->
     <div class="row">
-      <div class="col-md-8">
-        <h6><i class="fas fa-table text-info me-2"></i>Detalle por Equipos</h6>
-        <div class="table-responsive">
-          <table class="table table-sm">
-            <thead class="table-dark">
-              <tr>
-                <th>#</th>
-                <th>Equipo</th>
-                <th>Score Riesgo</th>
-                <th>Ingresos</th>
-                <th>Críticos</th>
-                <th>MTTR</th>
-                <th>Mes Pico</th>
-              </tr>
-            </thead>
-            <tbody>${equiposHtml}</tbody>
-          </table>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <h6><i class="fas fa-info-circle text-success me-2"></i>Matriz de Riesgo</h6>
-        <div class="card bg-light">
+      <div class="col-md-12">
+        <div class="card border-primary">
+          <div class="card-header bg-primary text-white">
+            <h6 class="mb-0"><i class="fas fa-code me-2"></i>Información Técnica para Desarrolladores</h6>
+          </div>
           <div class="card-body">
-            <canvas id="matrizRiesgoChart" width="300" height="250"></canvas>
+            <div class="row">
+              
+              <div class="col-md-6 mb-3">
+                <h6><i class="fas fa-terminal me-2 text-primary"></i>Ejemplo cURL:</h6>
+                <div class="bg-dark p-3 rounded">
+                  <code class="text-light small">
+                    curl -X GET "https://ia-tallercotema.onrender.com/api/kpi/fr30" \\<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp; -H "Accept: application/json"
+                  </code>
+                </div>
+                <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyToClipboard('curl -X GET &quot;https://ia-tallercotema.onrender.com/api/kpi/fr30&quot; -H &quot;Accept: application/json&quot;')">
+                  <i class="fas fa-copy me-1"></i>Copiar cURL
+                </button>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <h6><i class="fas fa-clock me-2 text-success"></i>Información de Actualización:</h6>
+                <ul class="small mb-0">
+                  <li><strong>Frecuencia:</strong> Los datos se actualizan en tiempo real</li>
+                  <li><strong>Caché:</strong> Sin caché, siempre datos frescos</li>
+                  <li><strong>Formato:</strong> JSON estándar UTF-8</li>
+                  <li><strong>Disponibilidad:</strong> 24/7</li>
+                  <li><strong>Latencia:</strong> < 2 segundos típico</li>
+                </ul>
+              </div>
+
+              <div class="col-md-12">
+                <div class="alert alert-success">
+                  <h6><i class="fas fa-check-circle me-2"></i>Campos de Datos Principales:</h6>
+                  <div class="row">
+                    <div class="col-md-4">
+                      <strong>Equipos Críticos:</strong>
+                      <ul class="small mb-0">
+                        <li><code>equipment_id</code> - ID del equipo</li>
+                        <li><code>risk_score_percent</code> - Riesgo 0-100%</li>
+                        <li><code>risk_category</code> - CRÍTICO/MEDIO/NORMAL</li>
+                        <li><code>mttr_hours</code> - Tiempo de reparación</li>
+                      </ul>
+                    </div>
+                    <div class="col-md-4">
+                      <strong>Proyección Mensual:</strong>
+                      <ul class="small mb-0">
+                        <li><code>period</code> - Período temporal</li>
+                        <li><code>month_number</code> - Número de mes</li>
+                        <li><code>projected_corrective_maintenance</code> - Correctivos proyectados</li>
+                      </ul>
+                    </div>
+                    <div class="col-md-4">
+                      <strong>Metadatos:</strong>
+                      <ul class="small mb-0">
+                        <li><code>timestamp_utc</code> - Hora de cálculo</li>
+                        <li><code>confidence_level</code> - Nivel de confianza</li>
+                        <li><code>total_equipment_analyzed</code> - Total equipos</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
     </div>
     
-    <div class="mt-3">
+    <div class="mt-3 text-center">
       <small class="text-muted">
-        <strong>Factores considerados:</strong> Frecuencia de ingresos (70%), Eficiencia tiempo ciclo (30%)
+        <strong>🎯 KPI FR-30 Optimizado v2.1</strong> | 
+        Algoritmo de riesgo basado en frecuencia de fallas y análisis predictivo | 
+        <strong>Período de análisis:</strong> Septiembre - Octubre 2025
       </small>
     </div>`;
   
-  // Crear gráficos con Chart.js
-  setTimeout(() => {
-    createAdvancedCharts(equipos, meses, factores);
-  }, 100);
+  // Ya no crear gráficos vacíos - mostrar mensaje de conexión exitosa
+  panel.innerHTML += `
+    <div class="alert alert-info mt-3">
+      <i class="fas fa-info-circle me-2"></i>
+      <strong>Análisis completado:</strong> Los datos están listos para consumo desde herramientas de Business Intelligence. 
+      Utiliza las URLs proporcionadas arriba para conectar Power BI, Tableau, Excel u otras herramientas de análisis.
+    </div>
+  `;
+}
 }
 
 function createAdvancedCharts(equipos, meses, factores) {
@@ -927,6 +1050,28 @@ function showError(message) {
   const modal = new bootstrap.Modal(document.getElementById('errorModal')); modal.show();
 }
 function reloadPage(){ location.reload(); }
+
+// Función para copiar texto al portapapeles
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    // Mostrar mensaje de confirmación
+    const originalButton = event.target;
+    const originalText = originalButton.innerHTML;
+    originalButton.innerHTML = '<i class="fas fa-check me-1"></i>¡Copiado!';
+    originalButton.classList.remove('btn-outline-primary', 'btn-outline-success');
+    originalButton.classList.add('btn-success');
+    
+    setTimeout(() => {
+      originalButton.innerHTML = originalText;
+      originalButton.classList.remove('btn-success');
+      originalButton.classList.add(originalText.includes('version_check') ? 'btn-outline-success' : 'btn-outline-primary');
+    }, 2000);
+  }).catch(function(err) {
+    console.error('Error al copiar: ', err);
+    alert('Error al copiar al portapapeles. Por favor, copia manualmente: ' + text);
+  });
+}
+
 </script>
 
 {% endblock %}
