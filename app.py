@@ -1089,6 +1089,77 @@ def ia_documentation():
         return redirect('/')
 
 
+@app.route('/api/kpi/fr30', methods=['GET'])
+def api_kpi_fr30():
+    """
+    API KPI FR-30 - Endpoint limpio para consumo desde BI
+    Retorna equipos con mayor tendencia a fallar (0-100%) mes actual y próximo.
+    """
+    try:
+        df = global_data.get('df')
+        if df is None or df.empty:
+            # Usar datos de muestra para demostración
+            df_sample = create_sample_data()
+            global_data['df'] = df_sample
+            df = df_sample
+            
+        # Obtener cálculo KPI FR-30
+        kpi_result = get_fr30_advanced_analysis(df)
+        
+        # Estructura limpia para BI
+        api_response = {
+            "kpi_metadata": {
+                "kpi_name": "FR-30 Equipment Failure Risk",
+                "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+                "calculation_algorithm": kpi_result.get('algoritmo', 'FR-30 v2.1'),
+                "confidence_level": round(kpi_result.get('precision_estimada', 0.85) * 100, 1),
+                "dataset_records": len(df),
+                "analysis_period": "Current Month + Next Month"
+            },
+            "critical_equipment": [],
+            "monthly_forecast": [],
+            "kpi_summary": {
+                "total_equipment_analyzed": kpi_result.get('total_equipos_analizados', 0),
+                "critical_equipment_count": kpi_result.get('equipos_criticos_detectados', 0),
+                "risk_threshold_critical": 70,
+                "risk_threshold_medium": 40
+            }
+        }
+        
+        # Equipos críticos (Top 20)
+        for rank, equipo in enumerate(kpi_result.get('equipos_riesgo', [])[:20], 1):
+            api_response["critical_equipment"].append({
+                "rank": rank,
+                "equipment_id": equipo.get('equipo'),
+                "risk_score_percent": equipo.get('riesgo_score', 0),
+                "risk_category": equipo.get('estado', 'NORMAL'),
+                "total_interventions": equipo.get('total_ingresos', 0),
+                "critical_interventions": equipo.get('ingresos_criticos', 0),
+                "mttr_hours": equipo.get('mttr_horas', 0),
+                "peak_risk_month": equipo.get('mes_mayor_riesgo', 1)
+            })
+        
+        # Proyección mensual
+        for month_data in kpi_result.get('meses_tendencia', []):
+            api_response["monthly_forecast"].append({
+                "period": month_data.get('periodo', 'Unknown'),
+                "month_number": month_data.get('mes', 1),
+                "projected_corrective_maintenance": month_data.get('total_correctivas', 0),
+                "critical_equipment_projected": month_data.get('equipos_criticos', 0)
+            })
+        
+        return jsonify(api_response)
+        
+    except Exception as e:
+        logger.exception(f"Error en API KPI FR-30: {e}")
+        return jsonify({
+            "error": True,
+            "error_message": "Internal calculation error",
+            "error_detail": str(e),
+            "timestamp_utc": datetime.utcnow().isoformat() + "Z"
+        }), 500
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
