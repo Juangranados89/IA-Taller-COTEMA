@@ -1089,6 +1089,32 @@ def ia_documentation():
         return redirect('/')
 
 
+@app.route('/version_check')
+def version_check():
+    """Verificar versión activa y características disponibles"""
+    from datetime import datetime
+    version_info = {
+        "status": "ACTIVE",
+        "version": "COTEMA v2.1 - FR-30 KPI Optimizado",
+        "last_update": "2025-01-27 19:45 UTC",
+        "commit_hash": "b80bc7e",
+        "timestamp_check": datetime.now().isoformat(),
+        "features_active": [
+            "✅ Endpoint /analyze_statistics_advanced restaurado",
+            "✅ KPI FR-30 mejorado con cálculos confiables 0-100%",
+            "✅ Enfoque mes actual + próximo mes",
+            "✅ API limpia para BI: /api/kpi/fr30",
+            "✅ Algoritmo FR-30 v2.1 optimizado"
+        ],
+        "endpoints_available": [
+            "POST /analyze_statistics_advanced (Para interfaz actual)",
+            "GET /api/kpi/fr30 (Para consumo BI)",
+            "GET /version_check (Este endpoint)"
+        ]
+    }
+    return jsonify(version_info)
+
+
 @app.route('/api/kpi/fr30', methods=['GET'])
 def api_kpi_fr30():
     """
