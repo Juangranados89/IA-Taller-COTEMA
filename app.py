@@ -64,7 +64,8 @@ def create_sample_data():
     ]
     
     sample_data = []
-    base_date = datetime(2023, 1, 1)
+    # FECHAS MÁS RECIENTES - Enfocar en últimos 6 meses para mostrar tendencia actual
+    base_date = datetime(2025, 4, 1)  # Abril 2025 hacia adelante
     
     for _ in range(500):  # 500 registros de muestra
         # Seleccionar equipo con distribución realista (algunos equipos fallan más)
@@ -72,14 +73,23 @@ def create_sample_data():
                                weights=[1.5, 1.3, 1.2, 1.0, 1.1, 0.8, 0.9, 1.4, 1.1, 0.7, 
                                        0.6, 0.8, 0.9, 0.7, 0.5])[0]
         
-        # Fecha aleatoria en los últimos 2.5 años con patrón estacional
-        days_offset = random.randint(0, 900)
+        # Fecha aleatoria en los últimos 5 meses con énfasis en agosto-septiembre
+        days_offset = random.randint(0, 150)  # Últimos 5 meses
         fecha = base_date + timedelta(days=days_offset)
         
-        # Ajuste estacional (más fallas en ciertos meses)
+        # BOOST para agosto y septiembre (meses 8 y 9)
+        if random.random() < 0.4:  # 40% de probabilidad de forzar mes reciente
+            # Forzar fechas de agosto-septiembre 2025
+            fecha = datetime(2025, random.choice([8, 9]), random.randint(1, 28))
+        
+        # Ajuste estacional con ÉNFASIS en mes actual (septiembre)
         month = fecha.month
         seasonal_multiplier = 1.0
-        if month in [1, 5, 9]:  # Meses con más actividad
+        if month == 9:  # SEPTIEMBRE - Mayor actividad
+            seasonal_multiplier = 2.0
+        elif month == 8:  # AGOSTO - Alta actividad
+            seasonal_multiplier = 1.5
+        elif month in [1, 5]:  # Otros meses pico
             seasonal_multiplier = 1.3
         elif month in [7, 12]:  # Meses con menos actividad
             seasonal_multiplier = 0.7
@@ -771,33 +781,43 @@ def analyze_statistics_advanced():
     """
     KPI FR-30 avanzado: equipos con mayor tendencia a fallar (período actual y próximo mes).
     Enfocado en cálculos precisos para el mes actual y siguiente.
+    VERSIÓN ACTUALIZADA - Sin caché
     """
     try:
+        # FORZAR LIMPIEZA DE DATOS ANTERIORES
+        global_data.clear()
+        
         df = global_data.get('df')
         if df is None or df.empty:
             # Si no hay datos cargados, usar datos de muestra para demostración
-            print("⚠️ No hay datos cargados, creando datos de muestra...")
+            print("⚠️ No hay datos cargados, creando datos de muestra FRESCOS...")
             df_sample = create_sample_data()
             global_data['df'] = df_sample
             df = df_sample
-            print(f"✅ Datos de muestra creados: {len(df)} registros")
+            print(f"✅ Datos de muestra NUEVOS creados: {len(df)} registros")
 
-        update_progress("Analizando tendencias FR-30", 1, 3, f"Calculando riesgo de falla...")
+        update_progress("Analizando tendencias FR-30", 1, 3, f"Calculando riesgo ACTUALIZADO...")
         
         # Ejecutar análisis avanzado centrado en mes actual y próximo
         advanced_analysis = get_fr30_advanced_analysis(df)
         
         update_progress("Refinando cálculos de riesgo", 2, 3, "Aplicando algoritmos predictivos...")
         
-        # Estructura de respuesta mejorada y enfocada
+        # Estructura de respuesta mejorada y enfocada SIN CACHÉ
+        from datetime import datetime
+        timestamp_actual = datetime.now()
+        mes_actual = timestamp_actual.month  # 9 = Septiembre
+        
         enhanced_data = {
             **advanced_analysis,
             'analysis_type': 'FR-30 Predictive Risk Analysis',
             'total_registros_dataset': len(df),
-            'periodo_analisis': 'Mes Actual y Próximo Mes',
-            'algoritmo_version': 'FR-30 v2.1 Optimizado',
-            'timestamp': datetime.now().isoformat(),
-            'cache_buster': datetime.now().timestamp()
+            'periodo_analisis': f'Mes Actual ({mes_actual}) y Próximo Mes ({mes_actual + 1 if mes_actual < 12 else 1})',
+            'algoritmo_version': 'FR-30 v2.1 Optimizado - ANTI-CACHÉ',
+            'timestamp': timestamp_actual.isoformat(),
+            'cache_buster': timestamp_actual.timestamp(),
+            'mes_actual_numero': mes_actual,
+            'force_refresh': True
         }
         
         # Asegurar que los equipos están ordenados por riesgo descendente
@@ -813,10 +833,14 @@ def analyze_statistics_advanced():
         
         response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
         response = Response(response_data, mimetype='application/json')
-        # Headers anti-caché
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        
+        # HEADERS ANTI-CACHÉ MÁS AGRESIVOS
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
+        response.headers['Last-Modified'] = timestamp_actual.strftime('%a, %d %b %Y %H:%M:%S GMT')
+        response.headers['ETag'] = f'"{timestamp_actual.timestamp()}"'
+        
         return response
         
     except Exception as e:
@@ -1167,6 +1191,35 @@ def api_train_progress():
             'status': 'error',
             'message': str(e),
             'models_ready': False
+        }), 500
+
+
+@app.route('/clear-cache', methods=['POST', 'GET'])
+def clear_cache():
+    """Limpiar caché y datos para forzar recálculo"""
+    try:
+        global_data.clear()
+        
+        # Mensaje de confirmación
+        response_data = {
+            'success': True,
+            'message': 'Caché limpiado exitosamente',
+            'timestamp': datetime.now().isoformat(),
+            'action': 'cache_cleared'
+        }
+        
+        response = Response(json.dumps(response_data), mimetype='application/json')
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+        
+    except Exception as e:
+        logger.exception(f"Error limpiando caché: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 
