@@ -1,53 +1,69 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Simple - COTEMA Analytics{% endblock %}
+{% block title %}Validación API Predictiva{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <!-- Encabezado del Dashboard -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-0">📊 Dashboard de Análisis Simplificado</h2>
-                    <p class="text-muted">Análisis rápido de KPIs con Inteligencia Artificial</p>
-                </div>
-                <div class="text-end">
-                    <span class="badge bg-success fs-6">
-                        <i class="fas fa-check-circle"></i> Sistema Operativo
-                    </span>
-                </div>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-light"><i class="bi bi-shield-check"></i> Validación API Predictiva</h1>
+        <button id="test-api-btn" class="btn btn-success btn-lg">
+            <i class="bi bi-play-fill"></i> Probar API
+        </button>
+    </div>
+
+    <div class="alert alert-info" role="alert">
+        <h5><i class="bi bi-info-circle"></i> Endpoint para BI:</h5>
+        <code>GET /api/v1/predictive_analysis</code>
+        <p class="mt-2 mb-0">Esta página es solo para validar que la API funciona correctamente.</p>
+    </div>
+
+    <div id="loader" class="text-center my-5" style="display: none;">
+        <div class="spinner-border text-success" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="text-light mt-2">Consultando API...</p>
+    </div>
+
+    <div id="validation-results" class="mt-4" style="display: none;">
+        <!-- Tabla de Equipos -->
+        <div class="card text-white bg-secondary mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-table"></i> Top 10 Equipos por Riesgo</h5>
+            </div>
+            <div class="card-body table-responsive">
+                <table class="table table-dark table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Equipo</th>
+                            <th class="text-center">Score Riesgo</th>
+                            <th class="text-center">Ingresos Críticos</th>
+                            <th class="text-center">MTTR (h)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risk-table-body">
+                        <!-- Generado por JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Gráfico de Carga de Trabajo -->
+        <div class="card text-white bg-secondary">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Proyección Carga de Trabajo</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="workload-chart" style="max-height: 300px;"></canvas>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <!-- Panel de Control -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card border-primary h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Selección de Período</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="mesSelector" class="form-label">Mes para Análisis de KPIs:</label>
-                        <select id="mesSelector" class="form-select">
-                            <option value="">Selecciona un mes...</option>
-                            {% for mes in months %}
-                            <option value="{{ mes }}">{{ mes }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button onclick="analizarMes()" class="btn btn-primary">
-                        <i class="fas fa-chart-line"></i> Analizar KPIs
-                    </button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6">
-            <div class="card border-info h-100">
-                <div class="card-header bg-info text-white">
+{% block scripts %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}
                     <h5 class="mb-0"><i class="fas fa-brain"></i> Análisis Predictivo IA</h5>
                 </div>
                 <div class="card-body d-flex flex-column justify-content-center">

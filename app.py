@@ -766,52 +766,69 @@ def analyze_statistics():
         logger.exception(f"analyze_statistics error: {e}")
         return jsonify({'success': False, 'error': str(e), 'debug': 'Error en el análisis'})
 
-@app.route('/analyze_statistics_advanced', methods=['POST'])
-def analyze_statistics_advanced():
-    """KPI FR-30 avanzado: equipos con mayor tendencia a fallar (período actual)."""
+@app.route('/api/v1/predictive_analysis', methods=['GET'])
+def api_predictive_analysis():
+    """
+    API principal para análisis predictivo - Endpoint para consumo desde BI.
+    Retorna estructura JSON limpia para herramientas externas.
+    """
     try:
         df = global_data.get('df')
         if df is None or df.empty:
-            # Si no hay datos cargados, usar datos de muestra para demostración
-            print("⚠️ No hay datos cargados, creando datos de muestra...")
+            # Crear datos de muestra si no hay datos cargados
             df_sample = create_sample_data()
             global_data['df'] = df_sample
             df = df_sample
-            print(f"✅ Datos de muestra creados: {len(df)} registros")
+            logger.info(f"Usando datos de muestra: {len(df)} registros")
 
-        update_progress("Analizando tendencias avanzadas", 1, 3, f"Procesando datos...")
+        # Ejecutar análisis avanzado
+        analysis = get_fr30_advanced_analysis(df)
         
-        # Ejecutar análisis avanzado (ya no necesita el año)
-        advanced_analysis = get_fr30_advanced_analysis(df)
-        
-        update_progress("Calculando factores de riesgo", 2, 3, "MTTR, sistemas críticos, frecuencia...")
-        
-        # Agregar metadatos adicionales y timestamp para evitar caché
-        enhanced_data = {
-            **advanced_analysis,
-            'analysis_type': 'FR-30 Advanced Predictive',
-            'total_registros_dataset': len(df),
-            'columnas_disponibles': list(df.columns),
-            'timestamp': datetime.now().isoformat(),
-            'cache_buster': datetime.now().timestamp(),  # Evita caché de datos
-            'data_hash': str(hash(str(df.shape) + str(df.columns.tolist())))  # Hash de los datos
+        # Estructurar respuesta para consumo externo
+        api_response = {
+            "metadata": {
+                "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+                "analysis_type": "FR-30 Advanced Predictive",
+                "confidence_score": analysis.get('precision_estimada', 0.75),
+                "total_equipment_analyzed": len(analysis.get('equipos_riesgo', [])),
+                "data_quality": {
+                    "total_records": len(df),
+                    "columns_available": len(df.columns)
+                }
+            },
+            "risk_ranking": [],
+            "workload_forecast": []
         }
         
-        update_progress("Análisis avanzado completado", 3, 3, "Predicciones generadas exitosamente")
-        reset_progress()
+        # Procesar equipos de riesgo
+        for i, equipo in enumerate(analysis.get('equipos_riesgo', [])[:20], 1):
+            api_response["risk_ranking"].append({
+                "rank": i,
+                "equipo": equipo.get('equipo'),
+                "score_riesgo": round(equipo.get('riesgo_score', 0), 1),
+                "ingresos_totales": equipo.get('total_ingresos', 0),
+                "ingresos_criticos": equipo.get('ingresos_criticos', 0),
+                "mttr_horas": round(equipo.get('mttr_horas', 0), 1) if equipo.get('mttr_horas') else None,
+                "mes_pico": equipo.get('mes_mayor_riesgo', 1)
+            })
         
-        response_data = json.dumps({'success': True, 'data': enhanced_data}, cls=CustomJSONEncoder)
-        response = Response(response_data, mimetype='application/json')
-        # Headers anti-caché
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        return response
+        # Procesar tendencia mensual
+        for mes_data in analysis.get('meses_tendencia', []):
+            api_response["workload_forecast"].append({
+                "periodo": mes_data.get('periodo', 'Desconocido'),
+                "mes": mes_data.get('mes', 1),
+                "correctivos_proyectados": mes_data.get('total_correctivas', 0)
+            })
+        
+        return jsonify(api_response)
         
     except Exception as e:
-        logger.exception(f"analyze_statistics_advanced error: {e}")
-        response_data = json.dumps({'success': False, 'error': str(e), 'debug': 'Error en el análisis avanzado'}, cls=CustomJSONEncoder)
-        return Response(response_data, mimetype='application/json')
+        logger.exception(f"Error en API predictive_analysis: {e}")
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e),
+            "timestamp_utc": datetime.utcnow().isoformat() + "Z"
+        }), 500
 
 @app.route('/api/frequency-analysis')
 def frequency_analysis():
