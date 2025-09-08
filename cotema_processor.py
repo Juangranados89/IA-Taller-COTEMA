@@ -476,10 +476,10 @@ def get_fr30_analysis(df: pd.DataFrame, days: int = 30, codigo_column: str = "co
     }
 
 
-def get_fr30_advanced_analysis(df, year=2025):
+def get_fr30_advanced_analysis(df):
     """
     Análisis FR-30 avanzado con Machine Learning y análisis de supervivencia Weibull.
-    Utiliza algoritmos sofisticados para predicciones más precisas.
+    Utiliza algoritmos sofisticados para predicciones más precisas del período actual.
     """
     try:
         # Detectar columnas automáticamente
@@ -504,44 +504,51 @@ def get_fr30_advanced_analysis(df, year=2025):
         column_mapping = {
             codigo_column: 'EQUIPO',
             'fecha_in': 'FECHA_INGRESO',
-            'tipo': 'TIPO_MANTENIMIENTO',
-            'descripcion': 'DESCRIPCION_FALLA'
+            'tipo_atencion': 'TIPO_MANTENIMIENTO',
+            'descripcion_intervencion': 'DESCRIPCION_FALLA'
         }
         
         for old_col, new_col in column_mapping.items():
             if old_col in df_analysis.columns:
-                df_analysis[new_col] = df_analysis[old_col]
-        
+                df_analysis.rename(columns={old_col: new_col}, inplace=True)
+
+        # Asegurar que 'TIPO_MANTENIMIENTO' exista, si no, usar 'tipo'
+        if 'TIPO_MANTENIMIENTO' not in df_analysis.columns and 'tipo' in df_analysis.columns:
+            df_analysis.rename(columns={'tipo': 'TIPO_MANTENIMIENTO'}, inplace=True)
+
+        if 'DESCRIPCION_FALLA' not in df_analysis.columns and 'descripcion' in df_analysis.columns:
+            df_analysis.rename(columns={'descripcion': 'DESCRIPCION_FALLA'}, inplace=True)
+
         # Verificar columnas esenciales
-        required_columns = ['EQUIPO', 'FECHA_INGRESO']
+        required_columns = ['EQUIPO', 'FECHA_INGRESO', 'TIPO_MANTENIMIENTO']
         if not all(col in df_analysis.columns for col in required_columns):
-            return _fallback_simple_analysis(df, year)
+            return _fallback_simple_analysis(df)
         
         df_analysis['FECHA_INGRESO'] = pd.to_datetime(df_analysis['FECHA_INGRESO'], errors='coerce')
         
         # Usar algoritmos avanzados si están disponibles
         if ADVANCED_ALGORITHMS_AVAILABLE:
-            print(f"🚀 Usando algoritmos avanzados ML + Weibull para análisis FR-30 {year}")
+            print(f"🚀 Usando algoritmos avanzados ML + Weibull para análisis FR-30 actual")
             
             # 1. Análisis ML avanzado
-            ml_analysis = get_advanced_fr30_prediction(df_analysis, year)
+            ml_analysis = get_advanced_fr30_prediction(df_analysis)
             
             # 2. Integrar análisis de supervivencia Weibull
             enhanced_analysis = integrate_weibull_analysis(df_analysis, ml_analysis)
             
             # 3. Agregar métricas adicionales de calidad
-            enhanced_analysis['algoritmo_version'] = 'ML + Weibull v2.0'
+            enhanced_analysis['algoritmo_version'] = 'ML + Weibull v2.1'
             enhanced_analysis['precision_estimada'] = calculate_prediction_confidence(enhanced_analysis)
             
             return enhanced_analysis
         
         else:
             print(f"⚠️ Algoritmos avanzados no disponibles, usando análisis simplificado")
-            return _fallback_simple_analysis(df, year)
+            return _fallback_simple_analysis(df)
             
     except Exception as e:
         print(f"Error en análisis avanzado: {e}")
-        return _fallback_simple_analysis(df, year)
+        return _fallback_simple_analysis(df)
 
 
 def calculate_prediction_confidence(analysis):
@@ -569,7 +576,7 @@ def calculate_prediction_confidence(analysis):
         return 0.6  # Confianza por defecto
 
 
-def _fallback_simple_analysis(df, year=2025):
+def _fallback_simple_analysis(df):
     """Análisis de respaldo simplificado cuando algoritmos avanzados no están disponibles"""
     try:
         # Detectar columnas automáticamente
@@ -587,7 +594,6 @@ def _fallback_simple_analysis(df, year=2025):
                 "factores_analisis": {}
             }
         
-        # Filtrar por año 2025
         if "fecha_in" not in df.columns:
             return {
                 "error": "No se encontró columna fecha_in",
@@ -597,14 +603,18 @@ def _fallback_simple_analysis(df, year=2025):
             }
         
         df_copy = df.copy()
-        df_copy["fecha_in"] = pd.to_datetime(df_copy["fecha_in"], errors="coerce")
+        df_copy["fecha_in"] = pd.to_datetime(df_copy["fecha_in"], errors='coerce')
         
-        # Filtrar datos del año especificado
-        df_year = df_copy[df_copy["fecha_in"].dt.year == year].copy()
+        # Usar datos del último año para relevancia
+        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=365)
+        df_year = df_copy[df_copy["fecha_in"] >= cutoff_date].copy()
         
         if df_year.empty:
+            df_year = df_copy.tail(500) # Usar últimos 500 registros si no hay datos del último año
+
+        if df_year.empty:
             return {
-                "error": f"No hay datos para el año {year}",
+                "error": f"No hay datos suficientes para el análisis",
                 "equipos_riesgo": [],
                 "meses_tendencia": [],
                 "factores_analisis": {}
@@ -615,7 +625,7 @@ def _fallback_simple_analysis(df, year=2025):
         
         # Análisis básico por equipo
         equipos_analysis = []
-        equipos_unicos = df_year[codigo_column].dropna().unique()[:20]  # Limitar a 20 equipos
+        equipos_unicos = df_year[codigo_column].dropna().unique()[:30]  # Limitar a 30 equipos
         
         for equipo in equipos_unicos:
             equipo_data = df_year[df_year[codigo_column] == equipo]
@@ -630,7 +640,7 @@ def _fallback_simple_analysis(df, year=2025):
             riesgo_total = (frecuencia_score * 0.7) + (actividad_score * 0.3)
             
             # Mes con más actividad
-            mes_pico = equipo_data["mes"].mode().iloc[0] if not equipo_data.empty else 1
+            mes_pico = equipo_data["mes"].mode().iloc[0] if not equipo_data.empty else datetime.now().month
             
             equipos_analysis.append({
                 "equipo": str(equipo),
@@ -645,26 +655,32 @@ def _fallback_simple_analysis(df, year=2025):
         # Ordenar por riesgo
         equipos_analysis.sort(key=lambda x: x["riesgo_score"], reverse=True)
         
-        # Análisis mensual
-        monthly_analysis = df_year.groupby("mes").size().reset_index(name="total_correctivas")
-        monthly_analysis["mes_nombre"] = monthly_analysis["mes"].apply(
-            lambda x: ["Ene", "Feb", "Mar", "Abr", "May", "Jun", 
-                      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][x-1]
-        )
+        # Análisis mensual para mes actual y próximo
+        mes_actual = datetime.now().month
+        mes_proximo = ((mes_actual % 12) + 1)
         
-        meses_tendencia = monthly_analysis.to_dict("records")
+        meses_tendencia = []
+        for mes, periodo in [(mes_actual, "Mes Actual"), (mes_proximo, "Próximo Mes")]:
+            count = df_year[df_year["mes"] == mes].shape[0]
+            meses_tendencia.append({
+                "mes": mes,
+                "mes_nombre": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", 
+                               "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][mes-1],
+                "total_correctivas": count,
+                "periodo": periodo
+            })
         
         # Factores resumen
         factores_resumen = {
             "total_equipos_analizados": len(equipos_analysis),
-            "total_correctivas_2025": len(df_year),
+            "total_correctivas_periodo": len(df_year),
             "promedio_mttr_horas": 0.0,
             "equipos_con_criticos": 0,
-            "mes_mas_problematico": monthly_analysis.loc[monthly_analysis["total_correctivas"].idxmax(), "mes"] if not monthly_analysis.empty else 1
+            "mes_mas_problematico": mes_actual
         }
         
         return {
-            "year_analizado": year,
+            "analysis_period": "current",
             "equipos_riesgo": equipos_analysis[:15],
             "meses_tendencia": meses_tendencia,
             "factores_analisis": factores_resumen,
@@ -673,7 +689,7 @@ def _fallback_simple_analysis(df, year=2025):
         
     except Exception as e:
         return {
-            "error": f"Error en análisis avanzado: {str(e)}",
+            "error": f"Error en análisis de respaldo: {str(e)}",
             "equipos_riesgo": [],
             "meses_tendencia": [],
             "factores_analisis": {}

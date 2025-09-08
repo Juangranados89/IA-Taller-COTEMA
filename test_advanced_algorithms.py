@@ -62,7 +62,8 @@ if ALGORITHMS_OK:
     # Probar algoritmo ML avanzado
     print("\n🤖 Probando algoritmo ML avanzado...")
     try:
-        ml_result = get_advanced_fr30_prediction(df_test, year=2025)
+        # Llamar a la función de predicción (sin el parámetro 'year')
+        ml_result = get_advanced_fr30_prediction(df_test)
         
         print(f"✅ ML Analysis completado")
         print(f"   - Equipos analizados: {len(ml_result.get('equipos_riesgo', []))}")

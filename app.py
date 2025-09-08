@@ -768,7 +768,7 @@ def analyze_statistics():
 
 @app.route('/analyze_statistics_advanced', methods=['POST'])
 def analyze_statistics_advanced():
-    """KPI FR-30 avanzado: equipos con mayor tendencia a fallar por mes (2025)."""
+    """KPI FR-30 avanzado: equipos con mayor tendencia a fallar (período actual)."""
     try:
         df = global_data.get('df')
         if df is None or df.empty:
@@ -779,20 +779,10 @@ def analyze_statistics_advanced():
             df = df_sample
             print(f"✅ Datos de muestra creados: {len(df)} registros")
 
-        # Obtener año del request (por defecto 2025)
-        year = 2025
-        try:
-            if request.content_type and 'application/json' in request.content_type:
-                request_data = request.get_json(silent=True) or {}
-                year = int(request_data.get('year', 2025))
-        except (TypeError, ValueError, Exception) as e:
-            logger.warning(f"Error obteniendo año del request: {e}")
-            year = 2025
-
-        update_progress("Analizando tendencias avanzadas", 1, 3, f"Procesando datos del {year}...")
+        update_progress("Analizando tendencias avanzadas", 1, 3, f"Procesando datos...")
         
-        # Ejecutar análisis avanzado
-        advanced_analysis = get_fr30_advanced_analysis(df, year=year)
+        # Ejecutar análisis avanzado (ya no necesita el año)
+        advanced_analysis = get_fr30_advanced_analysis(df)
         
         update_progress("Calculando factores de riesgo", 2, 3, "MTTR, sistemas críticos, frecuencia...")
         

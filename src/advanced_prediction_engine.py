@@ -73,7 +73,7 @@ class AdvancedPredictionEngine:
             print(f"Error creando features avanzadas: {e}")
             return pd.DataFrame(), df
     
-    def predict_equipment_failure_risk(self, df, target_year=2025):
+    def predict_equipment_failure_risk(self, df):
         """Algoritmo 1: Random Forest + Gradient Boosting para riesgo de falla"""
         try:
             features_df, df_processed = self.create_advanced_features(df)
@@ -86,7 +86,7 @@ class AdvancedPredictionEngine:
             y = features_df['ratio_correctivos']  # Target: ratio de correctivos
             
             if len(X) < 5:  # Necesitamos al menos 5 equipos para entrenar
-                return self._fallback_risk_analysis(df, target_year)
+                return self._fallback_risk_analysis(df)
             
             # División train/test
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -124,13 +124,15 @@ class AdvancedPredictionEngine:
                 ]
                 recent_boost = min(len(recent_data) * 0.05, 0.3)  # Boost por actividad reciente
                 
+                final_risk = min(risk_score + recent_boost, 1.0)
+
                 equipos_riesgo.append({
                     'equipo': equipo,
-                    'riesgo_score': round((risk_score + recent_boost) * 100, 1),  # Convertir a escala 0-100
+                    'riesgo_score': round(final_risk * 100, 1),  # Convertir a escala 0-100
                     'total_ingresos': int(features['total_ingresos']),
                     'ingresos_criticos': int(features['correctivos_count']),
-                    'mttr_horas': round(features.get('tbf_promedio', 0) / 24, 1),
-                    'mes_mayor_riesgo': self._predict_peak_month(equipo, df_processed, target_year),
+                    'mttr_horas': round(features.get('tbf_promedio', 0) / 24, 1) if features.get('tbf_promedio') else 0,
+                    'mes_mayor_riesgo': self._predict_peak_month(equipo, df_processed),
                     'confianza_prediccion': round(min(features['total_ingresos'] / 10, 1.0), 2)
                 })
             
@@ -155,10 +157,10 @@ class AdvancedPredictionEngine:
             
         except Exception as e:
             print(f"Error en predicción ML: {e}")
-            return self._fallback_risk_analysis(df, target_year)
+            return self._fallback_risk_analysis(df)
     
-    def predict_monthly_trends_advanced(self, df, target_year=2025):
-        """Algoritmo 2: Análisis de series temporales con patrones estacionales"""
+    def predict_monthly_trends_advanced(self, df):
+        """Algoritmo 2: Análisis de series temporales para mes actual y próximo."""
         try:
             df_temporal = df.copy()
             df_temporal['FECHA_INGRESO'] = pd.to_datetime(df_temporal['FECHA_INGRESO'])
@@ -168,44 +170,34 @@ class AdvancedPredictionEngine:
             # Análisis de patrones históricos por mes
             patron_mensual = df_temporal[df_temporal['TIPO_MANTENIMIENTO'] == 'CORRECTIVO'].groupby('mes').size()
             
-            # Calcular predicciones solo para mes actual y próximos 2 meses
-            from datetime import datetime
+            # Calcular predicciones solo para mes actual y próximo mes
             mes_actual = datetime.now().month
             
             meses_prediccion = []
-            for i in range(3):  # Mes actual + 2 siguientes
-                mes = ((mes_actual - 1 + i) % 12) + 1  # Ciclo de 1-12
+            for i in range(2):  # Mes actual + 1 siguiente
+                mes = ((mes_actual - 1 + i) % 12) + 1
                 
                 # Base histórica para este mes
-                base_historica = patron_mensual.get(mes, 0)
+                base_historica = patron_mensual.get(mes, patron_mensual.mean() if not patron_mensual.empty else 5)
                 
                 # Factor de crecimiento (basado en tendencia de últimos años)
-                años_disponibles = df_temporal['año'].unique()
-                if len(años_disponibles) > 1:
-                    tendencia_anual = self._calculate_growth_trend(df_temporal, mes)
-                    proyeccion = base_historica * (1 + tendencia_anual)
-                else:
-                    proyeccion = base_historica
+                tendencia_anual = self._calculate_growth_trend(df_temporal, mes)
+                proyeccion = base_historica * (1 + tendencia_anual)
                 
                 # Ajuste por estacionalidad industrial
                 factor_estacional = self._get_seasonal_factor(mes)
                 proyeccion_ajustada = proyeccion * factor_estacional
                 
                 # Determinar etiqueta según la posición
-                if i == 0:
-                    etiqueta = "Mes Actual"
-                elif i == 1:
-                    etiqueta = "Próximo Mes"
-                else:
-                    etiqueta = "2 Meses"
+                etiqueta = "Mes Actual" if i == 0 else "Próximo Mes"
                 
                 meses_prediccion.append({
                     'mes': mes,
-                    'mes_nombre': f"{self._get_month_name(mes)} ({etiqueta})",
+                    'mes_nombre': f"{self._get_month_name(mes)}",
                     'total_correctivas': max(int(proyeccion_ajustada), 1),
-                    'confianza': min(base_historica / max(patron_mensual.max(), 1), 1.0),
+                    'confianza': min(base_historica / max(patron_mensual.max(), 1), 1.0) if not patron_mensual.empty else 0.5,
                     'factor_estacional': factor_estacional,
-                    'es_prediccion': i > 0,  # Marcar cuáles son predicciones futuras
+                    'es_prediccion': i > 0,
                     'periodo': etiqueta
                 })
             
@@ -215,36 +207,37 @@ class AdvancedPredictionEngine:
             print(f"Error en predicción temporal: {e}")
             return []
     
-    def _predict_peak_month(self, equipo, df, target_year):
+    def _predict_peak_month(self, equipo, df):
         """Predecir el mes de mayor riesgo para un equipo específico"""
         try:
             equipo_data = df[df['EQUIPO'] == equipo]
             if equipo_data.empty:
-                return 1
+                return datetime.now().month
                 
             # Análisis de patrones históricos del equipo
             equipo_data['mes'] = equipo_data['FECHA_INGRESO'].dt.month
             patron_equipo = equipo_data.groupby('mes').size()
             
             if patron_equipo.empty:
-                return 1
+                return datetime.now().month
                 
             # Mes con más incidencias históricas
-            mes_pico = patron_equipo.idxmax()
+            mes_pico_historico = patron_equipo.idxmax()
             
-            # Ajuste por tendencia reciente
+            # Ajuste por tendencia reciente (últimos 6 meses)
             datos_recientes = equipo_data[equipo_data['FECHA_INGRESO'] >= pd.Timestamp.now() - pd.Timedelta(days=180)]
             if not datos_recientes.empty:
                 patron_reciente = datos_recientes.groupby('mes').size()
                 if not patron_reciente.empty:
                     mes_pico_reciente = patron_reciente.idxmax()
-                    # Promedio ponderado: 70% histórico, 30% reciente
-                    mes_pico = round(0.7 * mes_pico + 0.3 * mes_pico_reciente)
+                    # Promedio ponderado: 60% histórico, 40% reciente
+                    mes_pico_final = round(0.6 * mes_pico_historico + 0.4 * mes_pico_reciente)
+                    return int(mes_pico_final) if 1 <= mes_pico_final <= 12 else mes_pico_historico
             
-            return int(mes_pico)
+            return int(mes_pico_historico)
             
         except:
-            return 1
+            return datetime.now().month
     
     def _calculate_growth_trend(self, df, mes):
         """Calcular tendencia de crecimiento para un mes específico"""
@@ -297,7 +290,7 @@ class AdvancedPredictionEngine:
         }
         return nombres.get(mes, f'Mes {mes}')
     
-    def _fallback_risk_analysis(self, df, target_year):
+    def _fallback_risk_analysis(self, df):
         """Análisis de respaldo cuando ML no es viable"""
         try:
             # Análisis simple pero efectivo basado en frecuencia y recencia
@@ -314,8 +307,11 @@ class AdvancedPredictionEngine:
             for equipo, stats in equipos_stats.iterrows():
                 # Score simple: frecuencia correctivos + factor recencia
                 freq_score = min(stats['correctivos'] / max(stats['total_ingresos'], 1), 1.0)
-                recency_score = min((pd.Timestamp.now() - stats['ultima_fecha']).days / 365, 0.3)
-                riesgo_score = freq_score + recency_score
+                
+                days_since_last = (pd.Timestamp.now() - stats['ultima_fecha']).days
+                recency_factor = max(0, 1 - (days_since_last / 180)) # 1 si es hoy, 0 si es hace 6 meses o más
+                
+                riesgo_score = (freq_score * 0.6) + (recency_factor * 0.4)
                 
                 equipos_riesgo.append({
                     'equipo': equipo,
@@ -323,7 +319,7 @@ class AdvancedPredictionEngine:
                     'total_ingresos': int(stats['total_ingresos']),
                     'ingresos_criticos': int(stats['correctivos']),
                     'mttr_horas': 0,
-                    'mes_mayor_riesgo': np.random.randint(1, 13),
+                    'mes_mayor_riesgo': self._predict_peak_month(equipo, df_analysis),
                     'confianza_prediccion': 0.6
                 })
             
@@ -339,32 +335,36 @@ class AdvancedPredictionEngine:
             return {'equipos_riesgo': []}
 
 # Funciones de utilidad para integración
-def get_advanced_fr30_prediction(df, year=2025):
-    """Función principal para obtener predicciones FR-30 avanzadas"""
+def get_advanced_fr30_prediction(df, period="current"):
+    """
+    Función principal para obtener predicciones FR-30 avanzadas para el período actual y futuro.
+    """
     engine = AdvancedPredictionEngine()
     
     # Predicción de equipos de riesgo
-    equipment_prediction = engine.predict_equipment_failure_risk(df, year)
+    equipment_prediction = engine.predict_equipment_failure_risk(df)
     
     # Predicción de tendencias mensuales
-    monthly_trends = engine.predict_monthly_trends_advanced(df, year)
+    monthly_trends = engine.predict_monthly_trends_advanced(df)
     
     # Métricas adicionales
     total_equipos = len(df['EQUIPO'].unique()) if 'EQUIPO' in df.columns else 0
-    total_correctivas = len(df[df['TIPO_MANTENIMIENTO'] == 'CORRECTIVO']) if 'TIPO_MANTENIMIENTO' in df.columns else 0
+    
+    # Consolidar factores de análisis
+    analysis_factors = {
+        'total_equipos_analizados': total_equipos,
+        'total_correctivas_historico': len(df[df['TIPO_MANTENIMIENTO'] == 'CORRECTIVO']) if 'TIPO_MANTENIMIENTO' in df.columns else 0,
+        'promedio_mttr_horas': np.mean([e.get('mttr_horas', 0) for e in equipment_prediction.get('equipos_riesgo', []) if e.get('mttr_horas')]),
+        'mes_mas_problematico': monthly_trends[0]['mes'] if monthly_trends else datetime.now().month,
+        'algoritmo_utilizado': equipment_prediction.get('algorithm_used', 'Advanced ML'),
+        'confianza_general': np.mean([e.get('confianza_prediccion', 0.5) for e in equipment_prediction.get('equipos_riesgo', [])])
+    }
     
     return {
         'equipos_riesgo': equipment_prediction.get('equipos_riesgo', []),
         'meses_tendencia': monthly_trends,
-        'factores_analisis': {
-            'total_equipos_analizados': total_equipos,
-            'total_correctivas_2025': sum([m.get('total_correctivas', 0) for m in monthly_trends]),
-            'promedio_mttr_horas': np.mean([e.get('mttr_horas', 0) for e in equipment_prediction.get('equipos_riesgo', [])]),
-            'mes_mas_problematico': monthly_trends[0]['mes'] if monthly_trends else 1,
-            'algoritmo_utilizado': equipment_prediction.get('algorithm_used', 'Advanced ML'),
-            'confianza_general': np.mean([e.get('confianza_prediccion', 0.5) for e in equipment_prediction.get('equipos_riesgo', [])])
-        },
+        'factores_analisis': analysis_factors,
         'model_metrics': equipment_prediction.get('model_accuracy', {}),
         'feature_importance': equipment_prediction.get('feature_importance', {}),
-        'year_analizado': year
+        'analysis_period': period
     }
