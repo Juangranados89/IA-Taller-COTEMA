@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, Response
+git commit -m "Revisión profunda y refactorización completa del webservice"from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, Response
 from datetime import datetime, timedelta
 import os
 from werkzeug.utils import secure_filename
@@ -414,7 +414,7 @@ def index():
 def get_progress():
     # Adaptar al formato que espera el frontend
     response = progress_state.copy()
-    response['percentage'] = response.get('progress', 0)
+    response['percentage'] = response.get('percentage', 0) # CORREGIDO: Usar 'percentage'
     response['details'] = response.get('message', '')
     return jsonify(response)
 
@@ -558,29 +558,48 @@ def process_uploaded_file(filepath, filename):
 # --------------------------------------
 @app.route('/dashboard')
 def dashboard():
+    """Renderiza el dashboard principal y unificado."""
     try:
         if global_data.get('df') is None:
-            flash('Primero debes cargar un archivo Excel.', 'warning')
+            flash('Primero debes cargar un archivo Excel para ver el dashboard.', 'warning')
             return redirect(url_for('index'))
 
         df = global_data['df']
-        months = []
+        
+        # Calcular meses disponibles para el selector
+        meses_disponibles = []
         if 'fecha_in' in df.columns:
             valid_dates = pd.to_datetime(df['fecha_in'], errors='coerce').dropna()
             if not valid_dates.empty:
-                months = sorted(valid_dates.dt.to_period('M').astype(str).unique().tolist(), reverse=True)
-        if not months:
-            months = []
+                meses_disponibles = sorted(valid_dates.dt.to_period('M').astype(str).unique().tolist(), reverse=True)
 
-        stats = global_data.get('stats', {'total_registros': len(df)})
-        return render_template('dashboard_simple.html',
-                               months=months,
+        # Calcular estadísticas para el panel lateral
+        stats = {
+            'total_registros': len(df),
+            'equipos_unicos': 0,
+            'sistemas_unicos': 0,
+            'fecha_min': 'N/A',
+            'fecha_max': 'N/A',
+        }
+        if 'codigo' in df.columns:
+            stats['equipos_unicos'] = df['codigo'].nunique()
+        if 'sistema_afectado' in df.columns:
+            stats['sistemas_unicos'] = df['sistema_afectado'].nunique()
+        if 'fecha_in' in df.columns and not valid_dates.empty:
+            stats['fecha_min'] = valid_dates.min().strftime('%Y-%m-%d')
+            stats['fecha_max'] = valid_dates.max().strftime('%Y-%m-%d')
+
+        # Los plots se generan dinámicamente con JS, así que pasamos un dict vacío
+        plots = {}
+
+        return render_template('dashboard.html',
+                               meses_disponibles=meses_disponibles,
                                stats=stats,
-                               total_registros=stats.get('total_registros', 0),
-                               ml_models_trained=global_data.get('ml_models_trained', False))
+                               plots=plots)
     except Exception as e:
         logger.exception(f"dashboard error: {e}")
-        return "<h1>Error 500</h1><p>Ocurrió un error al cargar el dashboard.</p>", 500
+        flash(f'Ocurrió un error al cargar el dashboard: {e}', 'danger')
+        return redirect(url_for('index'))
 
 @app.route('/kpis/<mes>')
 def calculate_kpis(mes):
@@ -784,8 +803,8 @@ def analyze_statistics_advanced():
     VERSIÓN ACTUALIZADA - Sin caché
     """
     try:
-        # FORZAR LIMPIEZA DE DATOS ANTERIORES
-        global_data.clear()
+        # NO LIMPIAR DATOS GLOBALES AQUÍ PARA NO PERDER EL ARCHIVO CARGADO
+        # global_data.clear()
         
         df = global_data.get('df')
         if df is None or df.empty:
@@ -1123,8 +1142,8 @@ def analyze_fr30():
             global_data['df'] = df_sample
             df = df_sample
             
-        # Usar la misma función de análisis avanzado
-        result = get_fr30_advanced_analysis(df)
+        # Usar la función de análisis FR-30 estándar
+        result = get_fr30_analysis(df)
         
         return jsonify({
             'success': True,
