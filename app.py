@@ -125,18 +125,8 @@ UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-global_data = {
-    'df': None,
-    'dataset_normalizado': None,
-    'reporte_calidad': None,
-    'catalogos': None,
-    'file_path': None,
-    'file_name': None,
-    'processed_date': None,
-    'ml_models_trained': False,
-    'deep_analysis_in_progress': False,
-    'analysis_type': None,
-}
+# Sistema basado en sesiones - eliminamos variables globales
+# Todos los datos se almacenan en session['key']
 
 progress_state = {
     'current_task': '',
@@ -191,15 +181,16 @@ class COTEMAMLEngine:
     def load_real_equipment_codes(self):
         """Códigos únicamente desde catálogos o DF real. Sin fallback."""
         try:
-            cats = global_data.get('catalogos') or {}
+            cats = session.get('catalogos') or {}
             lista = cats.get('equipos', {}).get('lista', [])
             if lista:
                 return list(map(str, lista))[:200]
         except Exception:
             pass
         try:
-            df = global_data.get('df')
-            if df is not None and len(df) > 0:
+            df_data = session.get('df')
+            if df_data is not None and len(df_data) > 0:
+                df = pd.DataFrame(df_data)
                 for col in df.columns:
                     name = str(col).lower()
                     if any(k in name for k in ['codigo', 'equipo', 'maquina', 'máquina', 'id']):
@@ -266,7 +257,7 @@ class COTEMAMLEngine:
 
         try:
             if df is None:
-                df = global_data.get('df')
+                df = session.get('df')
             if df is None or len(df) < 10:
                 self.is_trained = False
                 self.ml_mode = False
@@ -360,7 +351,7 @@ class COTEMAMLEngine:
 
     def generate_trend_forecast(self, equipo:str, days_ahead:int=30):
         """Devuelve solo histórico real (conteo de CORRECTIVAS por día). Sin simulaciones."""
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty or 'fecha_in' not in df.columns or 'tipo_atencion' not in df.columns:
             return {'historico': [], 'pronostico': [], 'equipo': equipo, 'mode': 'NO_DATA'}
 
@@ -397,7 +388,7 @@ ml_engine = COTEMAMLEngine()
 # --------------------------------------
 @app.route('/')
 def index():
-    stats = global_data.get('stats', {
+    stats = session.get('stats', {
         'total_registros': 0,
         'processing_time': 0,
         'sheet_used': None,
@@ -406,8 +397,8 @@ def index():
         'file_loaded': False
     })
     return render_template('index.html',
-                           data_loaded=global_data['df'] is not None,
-                           processed_date=global_data.get('processed_date'),
+                           data_loaded=bool(session.get('df')),
+                           processed_date=session.get('processed_date'),
                            stats=stats)
 
 @app.route('/progress', methods=['GET'])
@@ -421,12 +412,12 @@ def get_progress():
 @app.route('/ml-status')
 def ml_status():
     status = {
-        'deep_analysis_in_progress': global_data.get('deep_analysis_in_progress', False),
-        'ml_models_trained': global_data.get('ml_models_trained', False),
+        'deep_analysis_in_progress': session.get('deep_analysis_in_progress', False),
+        'ml_models_trained': session.get('ml_models_trained', False),
         'analysis_type': global_data.get('analysis_type', ''),
         'ml_progress': {
-            'percent': 100 if global_data.get('ml_models_trained') else 0,
-            'step': 'ready' if global_data.get('ml_models_trained') else 'idle',
+            'percent': 100 if session.get('ml_models_trained') else 0,
+            'step': 'ready' if session.get('ml_models_trained') else 'idle',
             'processed': 0,
             'total': 0
         }
@@ -475,7 +466,7 @@ def upload_file():
         return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
 
 def process_uploaded_file(filepath, filename):
-    """Lee Excel, procesa con cotema_processor y llena global_data (sin simulaciones)."""
+    """Lee Excel, procesa con cotema_processor y guarda en sesión (sin variables globales)."""
     import time
     start = time.time()
     try:
@@ -508,15 +499,16 @@ def process_uploaded_file(filepath, filename):
 
         dataset, quality, catalogs = process_cotema_data(df_raw)
 
-        # Guardar en estado global
-        global_data['df'] = pd.DataFrame(dataset)
-        global_data['dataset_normalizado'] = dataset
-        global_data['reporte_calidad'] = quality
-        global_data['catalogos'] = catalogs
-        global_data['file_path'] = filepath
-        global_data['file_name'] = filename
-        global_data['processed_date'] = datetime.now()
-        global_data['ml_models_trained'] = False
+        # Guardar en sesión en lugar de estado global
+        df_temp = pd.DataFrame(dataset)
+        session['df'] = dataset  # Guardar como lista de diccionarios para serialización
+        session['dataset_normalizado'] = dataset
+        session['reporte_calidad'] = quality
+        session['catalogos'] = catalogs
+        session['file_path'] = filepath
+        session['file_name'] = filename
+        session['processed_date'] = datetime.now().isoformat()
+        session['ml_models_trained'] = False
 
         # Stats para portada con más información
         errores_detectados = 0
@@ -527,8 +519,8 @@ def process_uploaded_file(filepath, filename):
                 errores_detectados += len(v)
 
         processing_time = round(time.time() - start, 2)
-        global_data['stats'] = {
-            'total_registros': quality.get('total_registros', len(global_data['df'])),
+        session['stats'] = {
+            'total_registros': quality.get('total_registros', len(df_temp)),
             'registros_abiertos': quality.get('registros_abiertos', 0),
             'registros_cerrados': quality.get('registros_cerrados', 0),
             'errores_detectados': errores_detectados,
@@ -536,16 +528,16 @@ def process_uploaded_file(filepath, filename):
             'available_sheets': sheets,
             'file_loaded': True,
             'processing_time': processing_time,
-            'columnas_procesadas': len(global_data['df'].columns),
+            'columnas_procesadas': len(df_temp.columns),
             'columnas_criticas': {
-                'fecha_in': 'fecha_in' in global_data['df'].columns,
-                'tipo_atencion': 'tipo_atencion' in global_data['df'].columns,
-                'codigo': 'codigo' in global_data['df'].columns
+                'fecha_in': 'fecha_in' in df_temp.columns,
+                'tipo_atencion': 'tipo_atencion' in df_temp.columns,
+                'codigo': 'codigo' in df_temp.columns
             }
         }
 
-        update_progress("Completado", 4, 4, f"Procesado en {processing_time}s - {len(global_data['df'])} registros")
-        logger.info(f"Procesado OK: {filename} en {processing_time}s - {len(global_data['df'])} registros")
+        update_progress("Completado", 4, 4, f"Procesado en {processing_time}s - {len(df_temp)} registros")
+        logger.info(f"Procesado OK: {filename} en {processing_time}s - {len(df_temp)} registros")
 
     except Exception as e:
         logger.exception(f"process_uploaded_file error: {e}")
@@ -560,11 +552,11 @@ def process_uploaded_file(filepath, filename):
 def dashboard():
     """Renderiza el dashboard principal y unificado."""
     try:
-        if global_data.get('df') is None:
+        if not session.get('df'):
             flash('Primero debes cargar un archivo Excel para ver el dashboard.', 'warning')
             return redirect(url_for('index'))
 
-        df = global_data['df']
+        df = pd.DataFrame(session['df'])
         
         # Calcular meses disponibles para el selector
         meses_disponibles = []
@@ -605,8 +597,11 @@ def dashboard():
 def calculate_kpis(mes):
     """KPIs básicos 100% reales. Sin simulación; si falta modelo, 0s."""
     try:
-        df = global_data.get('df')
-        if df is None or df.empty:
+        if not session.get('df'):
+            return jsonify({'error': 'No hay datos cargados'}), 400
+        
+        df = pd.DataFrame(session['df'])
+        if df.empty:
             return jsonify({'error': 'No hay datos cargados'}), 400
 
         dfm = df.copy()
@@ -673,7 +668,7 @@ def get_equipment_codes():
 def api_fr30_top5():
     """Top equipos por CORRECTIVAS en los últimos 90 días (real)."""
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty or 'fecha_in' not in df.columns or 'tipo_atencion' not in df.columns or 'codigo' not in df.columns:
             return jsonify({'success': True, 'data': {'metric': 'ingresos_correctivos_90d', 'items': [], 'since': None}})
 
@@ -703,10 +698,10 @@ def get_trend_forecast(equipo):
 def quick_analysis():
     """Análisis rápido: stats simples reales del DF cargado."""
     try:
-        if global_data.get('df') is None:
+        if not session.get('df'):
             return jsonify({'error': 'No hay archivo cargado'}), 400
 
-        df = global_data['df']
+        df = pd.DataFrame(session['df'])
         # Detectar columna código/equipo
         codigo_col = None
         for col in df.columns:
@@ -728,7 +723,7 @@ def quick_analysis():
             'file_loaded': True,
             'quick_analysis_done': True
         }
-        global_data['stats'] = {**global_data.get('stats', {}), **stats}
+        session['stats'] = {**session.get('stats', {}), **stats}
         return jsonify({'success': True, 'stats': stats})
     except Exception as e:
         set_progress_error(f'Error en análisis rápido: {str(e)}')
@@ -738,7 +733,7 @@ def quick_analysis():
 def analyze_statistics():
     """KPI FR-30 real (conteo de correctivas últimos N días)."""
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             return jsonify({'success': True, 'data': {'top_equipos': [], 'total_correctivas_en_ventana': 0, 'equipos_con_correctivas': 0, 'debug': 'No hay datos cargados'}})
 
@@ -806,12 +801,12 @@ def analyze_statistics_advanced():
         # NO LIMPIAR DATOS GLOBALES AQUÍ PARA NO PERDER EL ARCHIVO CARGADO
         # global_data.clear()
         
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             # Si no hay datos cargados, usar datos de muestra para demostración
             print("⚠️ No hay datos cargados, creando datos de muestra FRESCOS...")
             df_sample = create_sample_data()
-            global_data['df'] = df_sample
+            session['df'] = df_sample.to_dict('records')
             df = df_sample
             print(f"✅ Datos de muestra NUEVOS creados: {len(df)} registros")
 
@@ -871,7 +866,7 @@ def analyze_statistics_advanced():
 def frequency_analysis():
     """Frecuencia mensual de correctivas por equipo (real, simplificado)."""
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty or 'fecha_in' not in df.columns or 'codigo' not in df.columns:
             return jsonify({'success': True, 'data': {'items': []}})
 
@@ -902,9 +897,12 @@ def frequency_analysis():
 def train_models():
     """Entrena modelos solo si sklearn está disponible y hay datos suficientes."""
     try:
-        df = global_data.get('df')
+        if not session.get('df'):
+            return jsonify({'success': False, 'message': 'No hay datos cargados'}), 400
+        
+        df = pd.DataFrame(session['df'])
         ok = ml_engine.train_models_enhanced(df)
-        global_data['ml_models_trained'] = bool(ok)
+        session['ml_models_trained'] = bool(ok)
         if ok:
             return jsonify({'success': True, 'message': 'Modelos entrenados con datos reales', 'models': list(ml_engine.models.keys())})
         else:
@@ -927,14 +925,14 @@ def retrain_models():
 def ml_analysis():
     """Análisis completo de ML: entrena modelos y genera predicciones para equipos."""
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             return jsonify({'success': False, 'error': 'No hay datos cargados para análisis ML'}), 400
 
         # Paso 1: Entrenar modelos
         update_progress("Entrenando modelos ML", 1, 3, "Configurando algoritmos...")
         ok = ml_engine.train_models_enhanced(df)
-        global_data['ml_models_trained'] = bool(ok)
+        session['ml_models_trained'] = bool(ok)
         
         if not ok:
             return jsonify({'success': False, 'error': 'No se pudieron entrenar los modelos (sklearn no disponible o datos insuficientes)'}), 400
@@ -1010,14 +1008,14 @@ def ml_specific(analysis_type):
       - anomaly: score de anomalía por equipo
     """
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             return jsonify({'success': False, 'error': 'No hay datos cargados'}), 400
 
         # Asegurar modelos entrenados con datos reales
         if not (ml_engine.is_trained and ml_engine.ml_mode):
             ok = ml_engine.train_models_enhanced(df)
-            global_data['ml_models_trained'] = bool(ok)
+            session['ml_models_trained'] = bool(ok)
             if not ok:
                 return jsonify({'success': False, 'error': 'No se pudieron entrenar los modelos con los datos actuales'}), 400
 
@@ -1081,11 +1079,11 @@ def connection_test():
 @app.route('/api/status')
 def api_status():
     """Estado detallado del sistema con información de debug"""
-    df = global_data.get('df')
+    df = session.get('df')
     status = {
         'status': 'running',
         'data_loaded': df is not None,
-        'last_processed': global_data['processed_date'].isoformat() if global_data['processed_date'] else None,
+        'last_processed': session.get('processed_date', '').isoformat() if session.get('processed_date', '') else None,
         'ml_available': bool(ml_engine.is_trained and ml_engine.ml_mode),
         'version': '3.1.0'
     }
@@ -1136,10 +1134,10 @@ def ia_documentation():
 def analyze_fr30():
     """Ruta para análisis FR-30 específico - Compatible con predictions.html"""
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             df_sample = create_sample_data()
-            global_data['df'] = df_sample
+            session['df'] = df_sample.to_dict('records')
             df = df_sample
             
         # Usar la función de análisis FR-30 estándar
@@ -1164,10 +1162,10 @@ def analyze_fr30():
 def deep_analysis():
     """Análisis profundo - Compatible con dashboard_simple.html"""
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             df_sample = create_sample_data()
-            global_data['df'] = df_sample
+            session['df'] = df_sample.to_dict('records')
             df = df_sample
             
         # Ejecutar análisis avanzado
@@ -1275,11 +1273,11 @@ def api_kpi_fr30():
     Retorna equipos con mayor tendencia a fallar (0-100%) mes actual y próximo.
     """
     try:
-        df = global_data.get('df')
+        df = session.get('df')
         if df is None or df.empty:
             # Usar datos de muestra para demostración
             df_sample = create_sample_data()
-            global_data['df'] = df_sample
+            session['df'] = df_sample.to_dict('records')
             df = df_sample
             
         # Obtener cálculo KPI FR-30
