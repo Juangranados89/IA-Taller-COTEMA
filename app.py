@@ -396,9 +396,18 @@ def index():
         'registros_abiertos': 0,
         'file_loaded': False
     })
+    # Convertir fecha de string ISO a datetime si existe
+    processed_date_str = session.get('processed_date')
+    processed_date = None
+    if processed_date_str:
+        try:
+            processed_date = datetime.fromisoformat(processed_date_str)
+        except:
+            processed_date = None
+            
     return render_template('index.html',
                            data_loaded=bool(session.get('df')),
-                           processed_date=session.get('processed_date'),
+                           processed_date=processed_date,
                            stats=stats)
 
 @app.route('/progress', methods=['GET'])
@@ -449,16 +458,25 @@ def upload_file():
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         file.save(filepath)
 
-        # Procesar en segundo plano (para no bloquear el worker)
-        thread = threading.Thread(target=process_uploaded_file, args=(filepath, filename), daemon=True)
-        thread.start()
-        update_progress("Archivo recibido", 1, 4, "Procesando en servidor...")
-
-        # Si es XHR, responde JSON; si no, redirige al index
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
-            return jsonify({'success': True, 'message': f'Archivo {filename} subido. Procesamiento iniciado.'})
-        else:
-            return redirect(url_for('index'))
+        # Procesar directamente en la petición para evitar problemas con session
+        try:
+            update_progress("Archivo recibido", 1, 4, "Procesando en servidor...")
+            process_uploaded_file(filepath, filename)
+            
+            # Si es XHR, responde JSON; si no, redirige al index
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+                return jsonify({'success': True, 'message': f'Archivo {filename} procesado exitosamente.'})
+            else:
+                flash(f'Archivo {filename} procesado exitosamente.', 'success')
+                return redirect(url_for('index'))
+                
+        except Exception as process_error:
+            logger.error(f"Error procesando archivo: {process_error}")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+                return jsonify({'error': f'Error procesando archivo: {str(process_error)}'}), 500
+            else:
+                flash(f'Error procesando archivo: {str(process_error)}', 'danger')
+                return redirect(url_for('index'))
 
     except Exception as e:
         logger.exception(f"upload_file error: {e}")
