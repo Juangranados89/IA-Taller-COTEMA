@@ -1,4 +1,4 @@
-git commit -m "Revisión profunda y refactorización completa del webservice"from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, Response
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, Response
 from datetime import datetime, timedelta
 import os
 from werkzeug.utils import secure_filename
