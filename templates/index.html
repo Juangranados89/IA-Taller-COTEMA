@@ -148,6 +148,56 @@
                   </button>
                 </div>
               </form>
+              <script>
+                // Enviar archivo automáticamente al seleccionar (AJAX) y soportar drag&drop
+                document.addEventListener('DOMContentLoaded', function() {
+                  const fileInput = document.getElementById('file');
+                  const uploadZone = document.getElementById('upload-zone');
+
+                  if (!fileInput) return;
+
+                  fileInput.addEventListener('change', function() {
+                    if (!fileInput.files || !fileInput.files.length) return;
+                    const fd = new FormData();
+                    fd.append('file', fileInput.files[0], fileInput.files[0].name);
+
+                    fetch('/upload', {
+                      method: 'POST',
+                      body: fd,
+                      headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                      }
+                    })
+                    .then(resp => resp.json())
+                    .then(data => {
+                      if (data && data.success) {
+                        // recargar para mostrar estado "datos cargados"
+                        window.location.reload();
+                      } else {
+                        alert('Error al subir archivo: ' + (data && data.error ? data.error : 'Error desconocido'));
+                      }
+                    })
+                    .catch(err => {
+                      console.error('Upload error', err);
+                      alert('Error al subir archivo: ' + err.message);
+                    });
+                  });
+
+                  // Drag & drop
+                  if (uploadZone) {
+                    uploadZone.addEventListener('dragover', function(e) { e.preventDefault(); uploadZone.classList.add('border-primary'); });
+                    uploadZone.addEventListener('dragleave', function(e) { uploadZone.classList.remove('border-primary'); });
+                    uploadZone.addEventListener('drop', function(e) {
+                      e.preventDefault(); uploadZone.classList.remove('border-primary');
+                      const files = e.dataTransfer.files;
+                      if (files && files.length) {
+                        fileInput.files = files;
+                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                      }
+                    });
+                  }
+                });
+              </script>
               <small class="text-muted">
                 Busca automáticamente la hoja "Datos_Limpios"<br>
                 Formatos: .xlsx, .xls (máx. 50MB)
