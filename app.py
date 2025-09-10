@@ -478,6 +478,29 @@ def upload_file():
         set_progress_error(f'Error inesperado: {str(e)}')
         return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
 
+def clean_data_for_session(data):
+    """Limpia datos para que sean serializables en Flask session (elimina NaT, NaN, etc.)"""
+    if isinstance(data, dict):
+        cleaned = {}
+        for k, v in data.items():
+            if pd.isna(v) or v is pd.NaT:
+                cleaned[k] = None
+            elif isinstance(v, (dict, list)):
+                cleaned[k] = clean_data_for_session(v)
+            elif hasattr(v, 'isoformat'):  # datetime objects
+                cleaned[k] = v.isoformat()
+            else:
+                cleaned[k] = v
+        return cleaned
+    elif isinstance(data, list):
+        return [clean_data_for_session(item) for item in data]
+    elif pd.isna(data) or data is pd.NaT:
+        return None
+    elif hasattr(data, 'isoformat'):  # datetime objects
+        return data.isoformat()
+    else:
+        return data
+
 def process_uploaded_file(filepath, filename):
     """Lee Excel, procesa con cotema_processor y guarda en sesión (sin variables globales)."""
     import time
@@ -512,12 +535,17 @@ def process_uploaded_file(filepath, filename):
 
         dataset, quality, catalogs = process_cotema_data(df_raw)
 
+        # Limpiar datos para que sean serializables en Flask session
+        clean_dataset = clean_data_for_session(dataset)
+        clean_quality = clean_data_for_session(quality)
+        clean_catalogs = clean_data_for_session(catalogs)
+
         # Guardar en sesión en lugar de estado global
         df_temp = pd.DataFrame(dataset)
-        session['df'] = dataset  # Guardar como lista de diccionarios para serialización
-        session['dataset_normalizado'] = dataset
-        session['reporte_calidad'] = quality
-        session['catalogos'] = catalogs
+        session['df'] = clean_dataset  # Datos limpios y serializables
+        session['dataset_normalizado'] = clean_dataset
+        session['reporte_calidad'] = clean_quality
+        session['catalogos'] = clean_catalogs
         session['file_path'] = filepath
         session['file_name'] = filename
         session['processed_date'] = datetime.now().isoformat()
