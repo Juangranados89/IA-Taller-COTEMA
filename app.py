@@ -463,20 +463,15 @@ def upload_file():
             update_progress("Archivo recibido", 1, 4, "Procesando en servidor...")
             process_uploaded_file(filepath, filename)
             
-            # Si es XHR, responde JSON; si no, redirige al index
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
-                return jsonify({'success': True, 'message': f'Archivo {filename} procesado exitosamente.'})
-            else:
-                flash(f'Archivo {filename} procesado exitosamente.', 'success')
-                return redirect(url_for('index'))
+            # FORZAR SIEMPRE JSON PARA EVITAR EL ERROR "Unexpected token '<'"
+            # El frontend moderno usa AJAX y siempre espera JSON
+            logger.info(f"Upload processed for {filename}. Headers: {dict(request.headers)}")
+            return jsonify({'success': True, 'message': f'Archivo {filename} procesado exitosamente.'})
                 
         except Exception as process_error:
-            logger.error(f"Error procesando archivo: {process_error}")
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
-                return jsonify({'error': f'Error procesando archivo: {str(process_error)}'}), 500
-            else:
-                flash(f'Error procesando archivo: {str(process_error)}', 'danger')
-                return redirect(url_for('index'))
+            logger.exception(f"Processing failed for {filename}. Error: {process_error}")
+            # FORZAR SIEMPRE JSON en errores también
+            return jsonify({'error': f'Error procesando archivo: {str(process_error)}', 'detail': repr(process_error)}), 500
 
     except Exception as e:
         logger.exception(f"upload_file error: {e}")

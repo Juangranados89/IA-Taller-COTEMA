@@ -166,16 +166,32 @@
                       body: fd,
                       headers: {
                         'X-Requested-With': 'XMLHttpRequest'
-                      }
+                      },
+                      redirect: 'follow'
                     })
-                    .then(resp => resp.json())
+                    .then(async resp => {
+                      const ct = (resp.headers.get('content-type') || '').toLowerCase();
+                      // Si viene JSON, parseamos; si no, leemos texto (HTML o error)
+                      if (ct.includes('application/json')) {
+                        return resp.json();
+                      }
+                      const text = await resp.text();
+                      return { _html: text, status: resp.status };
+                    })
                     .then(data => {
                       if (data && data.success) {
                         // recargar para mostrar estado "datos cargados"
                         window.location.reload();
-                      } else {
-                        alert('Error al subir archivo: ' + (data && data.error ? data.error : 'Error desconocido'));
+                        return;
                       }
+                      if (data && data._html) {
+                        // Mostrar fragmento de la respuesta HTML para diagnóstico
+                        const snippet = data._html.replace(/\s+/g, ' ').slice(0, 500);
+                        console.warn('Upload returned HTML:', snippet);
+                        alert('Respuesta inesperada del servidor (HTML) — revisa logs del servidor.\n\nFragmento: ' + snippet);
+                        return;
+                      }
+                      alert('Error al subir archivo: ' + (data && data.error ? data.error : 'Error desconocido'));
                     })
                     .catch(err => {
                       console.error('Upload error', err);
