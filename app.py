@@ -484,27 +484,50 @@ def upload_file():
         return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
 
 def clean_data_for_session(data):
-    """Limpia datos para que sean serializables en Flask session (elimina NaT, NaN, etc.)"""
+    """Limpia datos para que sean serializables en Flask session (NaT/NaN→None, datetime→ISO, numpy→tipos nativos).
+
+    Maneja de forma segura dicts, listas, tuplas, sets, numpy arrays y pandas Series
+    sin evaluar la verdad de arrays (evita ValueError por pd.isna en contenedores).
+    """
+    def _clean_value(v):
+        # Contenedores: procesar recursivamente
+        if isinstance(v, (list, tuple, set)):
+            return [_clean_value(x) for x in list(v)]
+        if isinstance(v, (np.ndarray, pd.Series)):
+            try:
+                return [_clean_value(x) for x in v.tolist()]
+            except Exception:
+                return [_clean_value(x) for x in list(v)]
+
+        # NaT / NaN (solo para escalares)
+        try:
+            if v is pd.NaT:
+                return None
+        except Exception:
+            pass
+        try:
+            if np.isscalar(v) and pd.isna(v):
+                return None
+        except Exception:
+            pass
+
+        # Datetime-like
+        if isinstance(v, (datetime, pd.Timestamp)):
+            return v.isoformat()
+
+        # Numpy escalares → tipos nativos
+        if isinstance(v, np.generic):
+            try:
+                return v.item()
+            except Exception:
+                pass
+
+        return v
+
     if isinstance(data, dict):
-        cleaned = {}
-        for k, v in data.items():
-            if pd.isna(v) or v is pd.NaT:
-                cleaned[k] = None
-            elif isinstance(v, (dict, list)):
-                cleaned[k] = clean_data_for_session(v)
-            elif hasattr(v, 'isoformat'):  # datetime objects
-                cleaned[k] = v.isoformat()
-            else:
-                cleaned[k] = v
-        return cleaned
-    elif isinstance(data, list):
-        return [clean_data_for_session(item) for item in data]
-    elif pd.isna(data) or data is pd.NaT:
-        return None
-    elif hasattr(data, 'isoformat'):  # datetime objects
-        return data.isoformat()
+        return {k: _clean_value(v) for k, v in data.items()}
     else:
-        return data
+        return _clean_value(data)
 
 def process_uploaded_file(filepath, filename):
     """Lee Excel, procesa con cotema_processor y guarda en sesión (sin variables globales)."""
