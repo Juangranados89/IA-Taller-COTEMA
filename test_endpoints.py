@@ -26,7 +26,7 @@ ENDPOINTS = [
 
 BASE_URL = "http://localhost:5000"
 
-def test_endpoint(method, endpoint, description):
+def check_endpoint(method, endpoint, description):
     """Probar un endpoint específico"""
     url = BASE_URL + endpoint
     try:
@@ -59,7 +59,7 @@ def main():
     total_count = len(ENDPOINTS)
     
     for method, endpoint, description in ENDPOINTS:
-        if test_endpoint(method, endpoint, description):
+        if check_endpoint(method, endpoint, description):
             success_count += 1
     
     print("=" * 70)

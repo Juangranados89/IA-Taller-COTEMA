@@ -118,6 +118,10 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger("COTEMA")
 
+# Compatibilidad: algunos scripts y endpoints antiguos esperan un estado global.
+# El sistema actual usa session, pero exponemos un dict vacío para evitar errores.
+global_data = {}
+
 # --------------------------------------
 # Estado global y helpers de progreso
 # --------------------------------------
@@ -351,7 +355,8 @@ class COTEMAMLEngine:
 
     def generate_trend_forecast(self, equipo:str, days_ahead:int=30):
         """Devuelve solo histórico real (conteo de CORRECTIVAS por día). Sin simulaciones."""
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty or 'fecha_in' not in df.columns or 'tipo_atencion' not in df.columns:
             return {'historico': [], 'pronostico': [], 'equipo': equipo, 'mode': 'NO_DATA'}
 
@@ -509,8 +514,11 @@ def process_uploaded_file(filepath, filename):
         update_progress("Leyendo Excel", 2, 4, "Inspeccionando hojas...")
         if pd is None:
             raise RuntimeError("Pandas no está disponible en el servidor.")
-
-        xl = pd.ExcelFile(filepath)  # usa engine por defecto disponible
+        
+        # Seleccionar motor según extensión para compatibilidad .xlsx/.xls
+        ext = os.path.splitext(filename)[1].lower()
+        engine = 'openpyxl' if ext == '.xlsx' else ('xlrd' if ext == '.xls' else None)
+        xl = pd.ExcelFile(filepath, engine=engine)  # usa engine explícito si aplica
         sheets = xl.sheet_names
         logger.info(f"Hojas disponibles en {filename}: {sheets}")
         
@@ -529,7 +537,7 @@ def process_uploaded_file(filepath, filename):
             logger.info(f"Usando primera hoja disponible: {sheet}")
 
         update_progress("Normalizando", 3, 4, f"Procesando hoja '{sheet}'...")
-        df_raw = pd.read_excel(filepath, sheet_name=sheet)
+        df_raw = pd.read_excel(filepath, sheet_name=sheet, engine=engine)
         logger.info(f"Datos leídos: {len(df_raw)} filas, {len(df_raw.columns)} columnas")
         logger.info(f"Columnas encontradas: {list(df_raw.columns)[:10]}")  # Primeras 10 columnas
 
@@ -596,7 +604,6 @@ def dashboard():
         if not session.get('df'):
             flash('Primero debes cargar un archivo Excel para ver el dashboard.', 'warning')
             return redirect(url_for('index'))
-
         df = pd.DataFrame(session['df'])
         
         # Calcular meses disponibles para el selector
@@ -709,7 +716,8 @@ def get_equipment_codes():
 def api_fr30_top5():
     """Top equipos por CORRECTIVAS en los últimos 90 días (real)."""
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty or 'fecha_in' not in df.columns or 'tipo_atencion' not in df.columns or 'codigo' not in df.columns:
             return jsonify({'success': True, 'data': {'metric': 'ingresos_correctivos_90d', 'items': [], 'since': None}})
 
@@ -774,7 +782,8 @@ def quick_analysis():
 def analyze_statistics():
     """KPI FR-30 real (conteo de correctivas últimos N días)."""
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             return jsonify({'success': True, 'data': {'top_equipos': [], 'total_correctivas_en_ventana': 0, 'equipos_con_correctivas': 0, 'debug': 'No hay datos cargados'}})
 
@@ -842,7 +851,8 @@ def analyze_statistics_advanced():
         # NO LIMPIAR DATOS GLOBALES AQUÍ PARA NO PERDER EL ARCHIVO CARGADO
         # global_data.clear()
         
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             # Si no hay datos cargados, usar datos de muestra para demostración
             print("⚠️ No hay datos cargados, creando datos de muestra FRESCOS...")
@@ -907,7 +917,8 @@ def analyze_statistics_advanced():
 def frequency_analysis():
     """Frecuencia mensual de correctivas por equipo (real, simplificado)."""
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty or 'fecha_in' not in df.columns or 'codigo' not in df.columns:
             return jsonify({'success': True, 'data': {'items': []}})
 
@@ -966,7 +977,8 @@ def retrain_models():
 def ml_analysis():
     """Análisis completo de ML: entrena modelos y genera predicciones para equipos."""
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             return jsonify({'success': False, 'error': 'No hay datos cargados para análisis ML'}), 400
 
@@ -1049,7 +1061,8 @@ def ml_specific(analysis_type):
       - anomaly: score de anomalía por equipo
     """
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             return jsonify({'success': False, 'error': 'No hay datos cargados'}), 400
 
@@ -1120,20 +1133,29 @@ def connection_test():
 @app.route('/api/status')
 def api_status():
     """Estado detallado del sistema con información de debug"""
-    df = session.get('df')
+    df_loaded = session.get('df')
     status = {
         'status': 'running',
-        'data_loaded': df is not None,
-        'last_processed': session.get('processed_date', '').isoformat() if session.get('processed_date', '') else None,
+        'data_loaded': df_loaded is not None,
+        # Guardamos processed_date como string ISO; no llamar isoformat sobre str
+        'last_processed': session.get('processed_date') if session.get('processed_date') else None,
         'ml_available': bool(ml_engine.is_trained and ml_engine.ml_mode),
         'version': '3.1.0'
     }
     
-    if df is not None:
+    if df_loaded is not None:
+        try:
+            df = pd.DataFrame(df_loaded)
+        except Exception:
+            df = None
+    else:
+        df = None
+
+    if df is not None and not df.empty:
         status.update({
             'data_info': {
-                'total_rows': len(df),
-                'total_columns': len(df.columns),
+                'total_rows': int(len(df)),
+                'total_columns': int(len(df.columns)),
                 'columns': list(df.columns),
                 'file_name': global_data.get('file_name'),
                 'sheet_used': global_data.get('stats', {}).get('sheet_used'),
@@ -1147,8 +1169,11 @@ def api_status():
         })
         
         # Sample data para debug
-        if len(df) > 0:
-            status['data_info']['sample_row'] = df.iloc[0].to_dict()
+        try:
+            if len(df) > 0:
+                status['data_info']['sample_row'] = df.iloc[0].to_dict()
+        except Exception:
+            pass
     
     return jsonify(status)
 
@@ -1175,7 +1200,8 @@ def ia_documentation():
 def analyze_fr30():
     """Ruta para análisis FR-30 específico - Compatible con predictions.html"""
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             df_sample = create_sample_data()
             session['df'] = df_sample.to_dict('records')
@@ -1203,7 +1229,8 @@ def analyze_fr30():
 def deep_analysis():
     """Análisis profundo - Compatible con dashboard_simple.html"""
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             df_sample = create_sample_data()
             session['df'] = df_sample.to_dict('records')
@@ -1314,7 +1341,8 @@ def api_kpi_fr30():
     Retorna equipos con mayor tendencia a fallar (0-100%) mes actual y próximo.
     """
     try:
-        df = session.get('df')
+        df_data = session.get('df')
+        df = pd.DataFrame(df_data) if df_data is not None else None
         if df is None or df.empty:
             # Usar datos de muestra para demostración
             df_sample = create_sample_data()

@@ -315,17 +315,24 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
         dias = (df_norm["fecha_out"] - df_norm["fecha_in"]).dt.days
         df_norm["dias_en_taller"] = np.where(dias >= 0, dias, np.nan)
 
+    # Si existe 'tipo' pero no 'tipo_atencion', usarlo como base
+    if 'tipo' in df_norm.columns and 'tipo_atencion' not in df_norm.columns:
+        try:
+            df_norm['tipo_atencion'] = df_norm['tipo']
+        except Exception:
+            pass
+
     # Categóricos clave en mayúsculas limpias (sin inventar valores)
     for cat in ("tipo_atencion", "sistema_afectado", "origen_averia", "atencion_local", "atencion_externa"):
         if cat in df_norm.columns:
             s = df_norm[cat].astype(str).str.strip().str.upper()
-            
+
             # Mapeos especiales para tipo_atencion para compatibilidad con diferentes archivos
             if cat == "tipo_atencion":
                 # Mapear valores comunes de estado/prioridad a tipos de atención
                 s = s.replace({
                     'COMPLETADO': 'CORRECTIVA',
-                    'PENDIENTE': 'CORRECTIVA', 
+                    'PENDIENTE': 'CORRECTIVA',
                     'EN_PROCESO': 'CORRECTIVA',
                     'PROGRAMADO': 'PREVENTIVA',
                     'ALTA': 'CORRECTIVA',
@@ -336,7 +343,7 @@ def _normalize_data_values(df: pd.DataFrame) -> pd.DataFrame:
                     'MEDIUM': 'CORRECTIVA',
                     'LOW': 'PREVENTIVA'
                 })
-            
+
             df_norm[cat] = s.replace({"NAN": np.nan, "NONE": np.nan, "": np.nan})
 
     return df_norm
@@ -485,26 +492,34 @@ def get_fr30_advanced_analysis(df):
     try:
         print(f"\n🎯 FR-30 KPI Calculation Started")
         print(f"📊 Registros a procesar: {len(df)}")
-        
+
         # Preparación de datos robusta
         df_clean = df.copy()
-        
+
         # Identificar columnas clave del dataset
         equipo_col = None
         fecha_col = None
         tipo_col = None
-        
+
         for col in df_clean.columns:
             col_lower = col.lower().strip()
-            if any(term in col_lower for term in ['equipo', 'equipment', 'maquina', 'machine']):
-                equipo_col = col
-            elif any(term in col_lower for term in ['fecha', 'date', 'tiempo']):
-                fecha_col = col
-            elif any(term in col_lower for term in ['tipo', 'type', 'category', 'mantenimiento']):
-                tipo_col = col
-        
+            if any(term in col_lower for term in ['codigo', 'equipo', 'equipment', 'maquina', 'machine']):
+                equipo_col = equipo_col or col
+            elif any(term in col_lower for term in ['fecha_in', 'fecha', 'date', 'tiempo']):
+                fecha_col = fecha_col or col
+            elif any(term in col_lower for term in ['tipo_atencion', 'tipo', 'type', 'category', 'mantenimiento']):
+                tipo_col = tipo_col or col
+
         print(f"🔍 Columnas identificadas: equipo='{equipo_col}', fecha='{fecha_col}', tipo='{tipo_col}'")
         
+        # Fallbacks explícitos a nombres comunes post-normalización
+        if not equipo_col and 'codigo' in df_clean.columns:
+            equipo_col = 'codigo'
+        if not fecha_col and 'fecha_in' in df_clean.columns:
+            fecha_col = 'fecha_in'
+        if not tipo_col and 'tipo_atencion' in df_clean.columns:
+            tipo_col = 'tipo_atencion'
+
         if not equipo_col:
             print("⚠️ No se identificó columna de equipos, usando análisis genérico...")
             return _create_fallback_fr30_kpi(df_clean)
@@ -527,7 +542,7 @@ def get_fr30_advanced_analysis(df):
                 
                 # Identificar mantenimientos correctivos (indicador de falla)
                 ingresos_criticos = 0
-                if tipo_col:
+                if tipo_col and tipo_col in df_equipo.columns:
                     tipos_criticos = df_equipo[tipo_col].astype(str).str.lower()
                     ingresos_criticos = sum(
                         any(term in tipo.lower() for term in ['correctivo', 'emergency', 'falla', 'repair', 'urgent'])
