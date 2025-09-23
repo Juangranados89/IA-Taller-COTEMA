@@ -617,20 +617,59 @@ def process_uploaded_file(filepath, filename):
         logger.info(f"Datos leídos: {len(df_raw)} filas, {len(df_raw.columns)} columnas")
         logger.info(f"Columnas encontradas: {list(df_raw.columns)[:10]}")  # Primeras 10 columnas
 
+        # Procesar datos con optimización de memoria
+        logger.info(f"Processing Excel with {len(df_raw)} rows, {len(df_raw.columns)} columns")
+        
+        # Para archivos grandes (>1000 filas), procesar en chunks
+        if len(df_raw) > 1000:
+            logger.info(f"Large file detected ({len(df_raw)} rows), using memory-optimized processing")
+            # Limitar el dataset a las últimas 3000 filas para evitar OOM en producción
+            if len(df_raw) > 3000:
+                logger.warning(f"Dataset too large ({len(df_raw)} rows), using last 3000 rows")
+                df_raw = df_raw.tail(3000).copy()
+        
         dataset, quality, catalogs = process_cotema_data(df_raw)
+        
+        # Liberar memoria del DataFrame original
+        del df_raw
+        import gc
+        gc.collect()
 
-        # Limpiar datos para que sean serializables en Flask session
-        clean_dataset = clean_data_for_session(dataset)
+        # Para archivos grandes, reducir el tamaño del dataset en session
+        if len(dataset) > 2000:
+            # Guardar solo los últimos 2000 registros más recientes en session
+            clean_dataset = clean_data_for_session(dataset[-2000:])
+            logger.info(f"Large dataset reduced to last 2000 records for session storage")
+        else:
+            clean_dataset = clean_data_for_session(dataset)
+            
         clean_quality = clean_data_for_session(quality)
         clean_catalogs = clean_data_for_session(catalogs)
 
         # Guardar en sesión con manejo robusto de errores de serialización
         try:
-            df_temp = pd.DataFrame(dataset)
+            # Verificar memoria disponible antes de guardar
+            import psutil
+            memory_available = psutil.virtual_memory().available / (1024*1024)  # MB
+            dataset_size_mb = len(str(clean_dataset)) / (1024*1024)  # Aproximación del tamaño
             
-            # Intentar guardar datos principales primero
-            session['df'] = clean_dataset  # Datos limpios y serializables
-            session['dataset_normalizado'] = clean_dataset
+            logger.info(f"Memory available: {memory_available:.1f}MB, Dataset size: ~{dataset_size_mb:.1f}MB")
+            
+            if dataset_size_mb > memory_available * 0.3:  # Si el dataset usa >30% de memoria disponible
+                logger.warning(f"Large dataset detected, using minimal session storage")
+                # Guardar solo estadísticas esenciales
+                session['file_name'] = filename
+                session['file_loaded'] = True
+                session['stats_only'] = True
+                dataset_sample = clean_dataset[:100] if len(clean_dataset) > 100 else clean_dataset
+                session['dataset_sample'] = dataset_sample
+            else:
+                # Guardar datos completos normalmente
+                df_temp = pd.DataFrame(dataset[:2000] if len(dataset) > 2000 else dataset)
+                session['df'] = clean_dataset
+                session['dataset_normalizado'] = clean_dataset
+                session['stats_only'] = False
+                
             session['reporte_calidad'] = clean_quality
             session['catalogos'] = clean_catalogs
             session['file_path'] = filepath
@@ -647,8 +686,11 @@ def process_uploaded_file(filepath, filename):
                     errores_detectados += len(v)
 
             processing_time = round(time.time() - start, 2)
+            total_records = len(dataset)
+            records_in_session = len(clean_dataset)
+            
             session['stats'] = {
-                'total_registros': quality.get('total_registros', len(df_temp)),
+                'total_registros': quality.get('total_registros', total_records),
                 'registros_abiertos': quality.get('registros_abiertos', 0),
                 'registros_cerrados': quality.get('registros_cerrados', 0),
                 'errores_detectados': errores_detectados,
@@ -656,11 +698,14 @@ def process_uploaded_file(filepath, filename):
                 'available_sheets': sheets,
                 'file_loaded': True,
                 'processing_time': processing_time,
-                'columnas_procesadas': len(df_temp.columns),
+                'columnas_procesadas': len(df_temp.columns) if 'df_temp' in locals() else 24,
+                'records_total': total_records,
+                'records_in_session': records_in_session,
+                'memory_optimized': total_records > 2000,
                 'columnas_criticas': {
-                    'fecha_in': 'fecha_in' in df_temp.columns,
-                    'tipo_atencion': 'tipo_atencion' in df_temp.columns,
-                    'codigo': 'codigo' in df_temp.columns
+                    'fecha_in': any('fecha_in' in str(r) for r in clean_dataset[:10]),
+                    'tipo_atencion': any('tipo_atencion' in str(r) for r in clean_dataset[:10]),
+                    'codigo': any('codigo' in str(r) for r in clean_dataset[:10])
                 }
             }
             

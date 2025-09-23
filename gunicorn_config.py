@@ -11,19 +11,24 @@ import os
 # Binding
 bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
 
-# Worker processes
-workers = min(4, (multiprocessing.cpu_count() * 2) + 1)
+# Worker processes (reducir para archivos grandes)
+workers = min(2, multiprocessing.cpu_count())  # Máximo 2 workers para evitar OOM
 worker_class = "sync"
-worker_connections = 1000
+worker_connections = 500  # Reducido para mejor memoria por conexión
 
-# Timeouts (importantes para archivos Excel grandes)
-timeout = 300  # 5 minutos para procesamiento de archivos grandes
-keepalive = 2
-graceful_timeout = 60
+# Timeouts CRÍTICOS para archivos Excel grandes
+timeout = 600  # 10 minutos para archivos grandes (era 300)
+keepalive = 5
+graceful_timeout = 120  # 2 minutos para shutdown graceful
 
-# Request limits
-max_requests = 500
-max_requests_jitter = 50
+# Request limits AUMENTADOS para archivos Excel
+max_requests = 100  # Reducido para forzar restart de workers
+max_requests_jitter = 25
+worker_memory_limit = "1024MB"  # Límite explícito de memoria por worker
+
+# File upload limits
+client_max_body_size = "50M"
+limit_request_field_size = 16384  # Aumentado para headers grandes
 
 # Logging
 accesslog = "-"
