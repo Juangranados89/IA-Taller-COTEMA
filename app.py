@@ -26,6 +26,9 @@ from cotema_processor import process_cotema_data, get_fr30_analysis, get_fr30_ad
 # --------------------------------------
 app = Flask(__name__)
 
+# Configuración de session segura
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cotema-analytics-secret-key-2024')
+
 # Custom JSON encoder to handle numpy types (compatible with NumPy 2.0+)
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -514,43 +517,63 @@ def upload_file():
         return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
 
 def clean_data_for_session(data):
-    """Limpia datos para que sean serializables en Flask session (NaT/NaN→None, datetime→ISO, numpy→tipos nativos).
-
-    Maneja de forma segura dicts, listas, tuplas, sets, numpy arrays y pandas Series
-    sin evaluar la verdad de arrays (evita ValueError por pd.isna en contenedores).
+    """Limpia datos para que sean serializables en Flask session.
+    
+    Convierte NaT/NaN/NA→None, datetime→ISO, numpy→tipos nativos.
+    Maneja de forma segura todos los tipos de pandas y numpy.
     """
     def _clean_value(v):
+        # Manejar None explícitamente
+        if v is None:
+            return None
+            
         # Contenedores: procesar recursivamente
         if isinstance(v, (list, tuple, set)):
             return [_clean_value(x) for x in list(v)]
+        if isinstance(v, dict):
+            return {k: _clean_value(val) for k, val in v.items()}
         if isinstance(v, (np.ndarray, pd.Series)):
             try:
                 return [_clean_value(x) for x in v.tolist()]
             except Exception:
                 return [_clean_value(x) for x in list(v)]
 
-        # NaT / NaN (solo para escalares)
+        # Pandas NaT/NA/NaN - PRIMERO antes que otros checks
         try:
-            if v is pd.NaT:
+            if pd.isna(v) or v is pd.NaT or v is pd.NA:
                 return None
-        except Exception:
+        except (ValueError, TypeError):
+            # isna() puede fallar con algunos tipos, ignorar
             pass
+            
+        # Verificar NaT específicamente
         try:
-            if np.isscalar(v) and pd.isna(v):
+            if hasattr(v, '_value') and pd.isna(v):
                 return None
-        except Exception:
+        except:
             pass
 
-        # Datetime-like
+        # Datetime-like (después de verificar NaT)
         if isinstance(v, (datetime, pd.Timestamp)):
-            return v.isoformat()
+            try:
+                return v.isoformat()
+            except (ValueError, AttributeError):
+                # Si es NaT u otro valor inválido
+                return None
 
         # Numpy escalares → tipos nativos
         if isinstance(v, np.generic):
             try:
                 return v.item()
-            except Exception:
-                pass
+            except (ValueError, OverflowError):
+                return None
+
+        # Verificar si es un tipo de pandas que no se puede serializar
+        if hasattr(v, 'dtype') and hasattr(v, 'item'):
+            try:
+                return v.item()
+            except:
+                return str(v) if v is not None else None
 
         return v
 
@@ -601,42 +624,64 @@ def process_uploaded_file(filepath, filename):
         clean_quality = clean_data_for_session(quality)
         clean_catalogs = clean_data_for_session(catalogs)
 
-        # Guardar en sesión en lugar de estado global
-        df_temp = pd.DataFrame(dataset)
-        session['df'] = clean_dataset  # Datos limpios y serializables
-        session['dataset_normalizado'] = clean_dataset
-        session['reporte_calidad'] = clean_quality
-        session['catalogos'] = clean_catalogs
-        session['file_path'] = filepath
-        session['file_name'] = filename
-        session['processed_date'] = datetime.now().isoformat()
-        session['ml_models_trained'] = False
+        # Guardar en sesión con manejo robusto de errores de serialización
+        try:
+            df_temp = pd.DataFrame(dataset)
+            
+            # Intentar guardar datos principales primero
+            session['df'] = clean_dataset  # Datos limpios y serializables
+            session['dataset_normalizado'] = clean_dataset
+            session['reporte_calidad'] = clean_quality
+            session['catalogos'] = clean_catalogs
+            session['file_path'] = filepath
+            session['file_name'] = filename
+            session['processed_date'] = datetime.now().isoformat()
+            session['ml_models_trained'] = False
 
-        # Stats para portada con más información
-        errores_detectados = 0
-        for v in quality.get('errores', {}).values():
-            if isinstance(v, (int, float)):
-                errores_detectados += int(v)
-            elif isinstance(v, dict):
-                errores_detectados += len(v)
+            # Stats para portada con más información
+            errores_detectados = 0
+            for v in quality.get('errores', {}).values():
+                if isinstance(v, (int, float)):
+                    errores_detectados += int(v)
+                elif isinstance(v, dict):
+                    errores_detectados += len(v)
 
-        processing_time = round(time.time() - start, 2)
-        session['stats'] = {
-            'total_registros': quality.get('total_registros', len(df_temp)),
-            'registros_abiertos': quality.get('registros_abiertos', 0),
-            'registros_cerrados': quality.get('registros_cerrados', 0),
-            'errores_detectados': errores_detectados,
-            'sheet_used': sheet,
-            'available_sheets': sheets,
-            'file_loaded': True,
-            'processing_time': processing_time,
-            'columnas_procesadas': len(df_temp.columns),
-            'columnas_criticas': {
-                'fecha_in': 'fecha_in' in df_temp.columns,
-                'tipo_atencion': 'tipo_atencion' in df_temp.columns,
-                'codigo': 'codigo' in df_temp.columns
+            processing_time = round(time.time() - start, 2)
+            session['stats'] = {
+                'total_registros': quality.get('total_registros', len(df_temp)),
+                'registros_abiertos': quality.get('registros_abiertos', 0),
+                'registros_cerrados': quality.get('registros_cerrados', 0),
+                'errores_detectados': errores_detectados,
+                'sheet_used': sheet,
+                'available_sheets': sheets,
+                'file_loaded': True,
+                'processing_time': processing_time,
+                'columnas_procesadas': len(df_temp.columns),
+                'columnas_criticas': {
+                    'fecha_in': 'fecha_in' in df_temp.columns,
+                    'tipo_atencion': 'tipo_atencion' in df_temp.columns,
+                    'codigo': 'codigo' in df_temp.columns
+                }
             }
-        }
+            
+            # Forzar actualización de session
+            session.modified = True
+            logger.info(f"Session data saved successfully for {filename}")
+            
+        except Exception as session_error:
+            logger.error(f"Error saving to session: {session_error}")
+            # Intentar guardar solo datos esenciales
+            try:
+                session.clear()  # Limpiar session corrupta
+                session['file_name'] = filename
+                session['file_loaded'] = True
+                session['error'] = f"Datos procesados pero error en session: {str(session_error)}"
+                session.modified = True
+                logger.warning(f"Fallback session save for {filename}")
+            except Exception as fallback_error:
+                logger.error(f"Critical session error: {fallback_error}")
+                # Continuar sin session - la app funcionará con datos temporales
+                pass
 
         update_progress("Completado", 4, 4, f"Procesado en {processing_time}s - {len(df_temp)} registros")
         logger.info(f"Procesado OK: {filename} en {processing_time}s - {len(df_temp)} registros")
