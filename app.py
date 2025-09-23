@@ -26,19 +26,22 @@ from cotema_processor import process_cotema_data, get_fr30_analysis, get_fr30_ad
 # --------------------------------------
 app = Flask(__name__)
 
-# Custom JSON encoder to handle numpy types
+# Custom JSON encoder to handle numpy types (compatible with NumPy 2.0+)
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, (np.integer, np.int_, np.intc, np.intp, np.int8,
-                            np.int16, np.int32, np.int64, np.uint8,
-                            np.uint16, np.uint32, np.uint64)):
+        # Handle numpy integers (compatible with NumPy 2.0+)
+        if isinstance(obj, np.integer):
             return int(obj)
-        elif isinstance(obj, (np.floating, np.float_, np.float16, np.float32, np.float64)):
+        # Handle numpy floats (compatible with NumPy 2.0+)
+        elif isinstance(obj, np.floating):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, (datetime, pd.Timestamp)):
             return obj.isoformat()
+        # Handle pandas NA/NaT values
+        elif pd.isna(obj):
+            return None
         return super().default(obj)
 
 def create_sample_data():
@@ -127,7 +130,9 @@ global_data = {}
 # --------------------------------------
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB límite de archivo
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
 # Sistema basado en sesiones - eliminamos variables globales
 # Todos los datos se almacenan en session['key']
@@ -458,10 +463,35 @@ def upload_file():
             set_progress_error('Formato no soportado. Use .xlsx o .xls')
             return jsonify({'error': 'Formato no soportado. Use .xlsx o .xls'}), 400
 
+        # Validar tamaño de archivo
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > MAX_FILE_SIZE:
+            set_progress_error(f'Archivo muy grande ({file_size/(1024*1024):.1f}MB). Límite: {MAX_FILE_SIZE/(1024*1024)}MB')
+            return jsonify({'error': f'Archivo muy grande ({file_size/(1024*1024):.1f}MB). Límite: {MAX_FILE_SIZE/(1024*1024)}MB'}), 413
+
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # Validación básica del archivo Excel antes de guardarlo
+        try:
+            file_content = file.read()
+            file.seek(0)  # Reset para guardar después
+            
+            # Verificar que es un archivo Excel válido
+            if not file_content.startswith(b'PK'):  # Los archivos .xlsx son archivos ZIP
+                set_progress_error('Archivo Excel corrupto o inválido')
+                return jsonify({'error': 'Archivo Excel corrupto o inválido'}), 400
+                
+        except Exception as validation_error:
+            set_progress_error(f'Error validando archivo: {str(validation_error)}')
+            return jsonify({'error': f'Error validando archivo: {str(validation_error)}'}), 400
+
         file.save(filepath)
+        logger.info(f"File saved: {filename} ({file_size/(1024*1024):.2f}MB)")
 
         # Procesar directamente en la petición para evitar problemas con session
         try:
