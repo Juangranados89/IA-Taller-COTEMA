@@ -586,6 +586,7 @@ def process_uploaded_file(filepath, filename):
     """Lee Excel, procesa con cotema_processor y guarda en sesión (sin variables globales)."""
     import time
     start = time.time()
+    processing_time = 0  # Inicializar la variable al principio
     try:
         update_progress("Leyendo Excel", 2, 4, "Inspeccionando hojas...")
         if pd is None:
@@ -648,14 +649,20 @@ def process_uploaded_file(filepath, filename):
 
         # Guardar en sesión con manejo robusto de errores de serialización
         try:
-            # Verificar memoria disponible antes de guardar
-            import psutil
-            memory_available = psutil.virtual_memory().available / (1024*1024)  # MB
-            dataset_size_mb = len(str(clean_dataset)) / (1024*1024)  # Aproximación del tamaño
+            # Verificar memoria disponible antes de guardar (con fallback si psutil no está disponible)
+            try:
+                import psutil
+                memory_available = psutil.virtual_memory().available / (1024*1024)  # MB
+                dataset_size_mb = len(str(clean_dataset)) / (1024*1024)  # Aproximación del tamaño
+                logger.info(f"Memory available: {memory_available:.1f}MB, Dataset size: ~{dataset_size_mb:.1f}MB")
+                use_memory_check = True
+            except ImportError:
+                logger.warning("psutil not available, skipping memory check")
+                memory_available = 1000  # Asumir 1GB disponible
+                dataset_size_mb = 10      # Asumir dataset pequeño
+                use_memory_check = False
             
-            logger.info(f"Memory available: {memory_available:.1f}MB, Dataset size: ~{dataset_size_mb:.1f}MB")
-            
-            if dataset_size_mb > memory_available * 0.3:  # Si el dataset usa >30% de memoria disponible
+            if use_memory_check and dataset_size_mb > memory_available * 0.3:  # Si el dataset usa >30% de memoria disponible
                 logger.warning(f"Large dataset detected, using minimal session storage")
                 # Guardar solo estadísticas esenciales
                 session['file_name'] = filename
@@ -715,6 +722,7 @@ def process_uploaded_file(filepath, filename):
             
         except Exception as session_error:
             logger.error(f"Error saving to session: {session_error}")
+            processing_time = round(time.time() - start, 2)  # Calcular tiempo antes del fallback
             # Intentar guardar solo datos esenciales
             try:
                 session.clear()  # Limpiar session corrupta
@@ -723,15 +731,24 @@ def process_uploaded_file(filepath, filename):
                 session['error'] = f"Datos procesados pero error en session: {str(session_error)}"
                 session.modified = True
                 logger.warning(f"Fallback session save for {filename}")
+                # Crear df_temp para el mensaje final
+                df_temp = pd.DataFrame(dataset[:100] if len(dataset) > 100 else dataset)
             except Exception as fallback_error:
                 logger.error(f"Critical session error: {fallback_error}")
                 # Continuar sin session - la app funcionará con datos temporales
+                df_temp = pd.DataFrame(dataset[:100] if len(dataset) > 100 else dataset)
                 pass
 
+        # Asegurar que df_temp existe para el mensaje final
+        if 'df_temp' not in locals():
+            df_temp = pd.DataFrame(clean_dataset[:100] if len(clean_dataset) > 100 else clean_dataset)
+
+        processing_time = round(time.time() - start, 2)  # Recalcular al final para estar seguro
         update_progress("Completado", 4, 4, f"Procesado en {processing_time}s - {len(df_temp)} registros")
         logger.info(f"Procesado OK: {filename} en {processing_time}s - {len(df_temp)} registros")
 
     except Exception as e:
+        processing_time = round(time.time() - start, 2)  # Calcular tiempo incluso en error
         logger.exception(f"process_uploaded_file error: {e}")
         set_progress_error(f"Error procesando archivo: {str(e)}")
         # También log para debugging
